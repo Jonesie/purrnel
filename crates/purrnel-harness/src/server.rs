@@ -50,6 +50,9 @@ async fn client(socket: WebSocket, hub: Arc<Hub>) {
     if let Some((voice, ears)) = hub.ready() {
         snapshot.push(Out::Ready { voice, ears });
     }
+    if let Some(w) = hub.weather() {
+        snapshot.push(w.to_out());
+    }
     if let Some(id) = hub.current_artefact.lock().unwrap().clone() {
         if let Ok((meta, html)) = hub.store.lock().unwrap().get(&id) {
             snapshot.push(Out::Artefact {

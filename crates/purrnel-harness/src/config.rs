@@ -26,6 +26,14 @@ pub struct Config {
     pub sfx_dir: PathBuf,
     pub mic_source: Option<String>,
     pub camera: String,
+    /// Show the real local weather in the window.
+    pub weather: bool,
+    /// Place name for the weather (default: the city of the system timezone).
+    pub location: Option<String>,
+    pub lat: Option<f64>,
+    pub lon: Option<f64>,
+    pub weather_url: String,
+    pub geocode_url: String,
 }
 
 fn env(name: &str) -> Option<String> {
@@ -85,6 +93,14 @@ impl Config {
             sfx_dir: env("PURRNEL_SFX").map(PathBuf::from).unwrap_or_else(|| root.join("assets/sfx")),
             mic_source: env("PURRNEL_MIC"),
             camera: env("PURRNEL_CAMERA").unwrap_or_else(|| "/dev/video0".into()),
+            weather: env("PURRNEL_WEATHER").as_deref() != Some("0"),
+            location: env("PURRNEL_LOCATION"),
+            lat: env("PURRNEL_LAT").and_then(|v| v.parse().ok()),
+            lon: env("PURRNEL_LON").and_then(|v| v.parse().ok()),
+            weather_url: env("PURRNEL_WEATHER_URL")
+                .unwrap_or_else(|| "https://api.open-meteo.com/v1/forecast".into()),
+            geocode_url: env("PURRNEL_GEOCODE_URL")
+                .unwrap_or_else(|| "https://geocoding-api.open-meteo.com/v1/search".into()),
         }
     }
 }

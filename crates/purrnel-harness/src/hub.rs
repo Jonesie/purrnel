@@ -44,6 +44,8 @@ pub struct Hub {
     clock: Mutex<(Option<Instant>, HashSet<&'static str>)>,
     wake_tx: OnceLock<mpsc::UnboundedSender<()>>,
     ready: Mutex<Option<(bool, bool)>>,
+    /// The latest real-world weather, replayed to every UI that connects.
+    weather: Mutex<Option<crate::weather::Weather>>,
 }
 
 impl Hub {
@@ -74,6 +76,7 @@ impl Hub {
             clock: Mutex::new((None, HashSet::new())),
             wake_tx: OnceLock::new(),
             ready: Mutex::new(None),
+            weather: Mutex::new(None),
         })
     }
 
@@ -120,6 +123,15 @@ impl Hub {
 
     pub fn ready(&self) -> Option<(bool, bool)> {
         *self.ready.lock().unwrap()
+    }
+
+    pub fn set_weather(&self, w: crate::weather::Weather) {
+        *self.weather.lock().unwrap() = Some(w);
+        self.emit(w.to_out());
+    }
+
+    pub fn weather(&self) -> Option<crate::weather::Weather> {
+        *self.weather.lock().unwrap()
     }
 
     // ---- timing ---------------------------------------------------------

@@ -38,6 +38,8 @@ pub enum Out {
     Sleep { place: String },
     /// Startup finished: whether she can speak and whether she can hear.
     Ready { voice: bool, ears: bool },
+    /// The real local weather outside: a WMO weather code plus cloud %, wind km/h, rain mm, temperature C.
+    Weather { code: u16, cloud: f32, wind: f32, precip: f32, temp: f32 },
     Looking,
     Notice { text: String },
     DataReply { id: String, req: u64, value: Option<Value> },

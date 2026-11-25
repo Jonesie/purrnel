@@ -7,6 +7,7 @@ mod protocol;
 mod server;
 mod stt;
 mod tts;
+mod weather;
 
 use config::Config;
 use hub::Hub;
@@ -31,6 +32,7 @@ async fn main() -> std::io::Result<()> {
         async move { hub.run_cat_ticker().await }
     });
     tokio::spawn(brain::run(hub.clone(), utter_rx));
+    tokio::spawn(weather::run(hub.clone()));
 
     // Voice comes up in the background so the UI is available immediately.
     tokio::spawn({

@@ -168,6 +168,25 @@
     <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
       <stop id="skyTop" offset="0" stop-color="#101a3e"/><stop id="skyBot" offset="1" stop-color="#2b3a73"/>
     </linearGradient>
+    <!-- weather patterns: scrolled from JS (see skyStep) -->
+    <pattern id="rainFar" width="34" height="46" patternUnits="userSpaceOnUse">
+      <path d="M6 2v14M23 24v14M14 36v8" stroke="#dbe9ff" stroke-width="1.1" stroke-linecap="round"/>
+    </pattern>
+    <pattern id="rainNear" width="58" height="84" patternUnits="userSpaceOnUse">
+      <path d="M10 4v26M38 38v28M52 10v18M24 60v22" stroke="#e4efff" stroke-width="1.8" stroke-linecap="round"/>
+    </pattern>
+    <pattern id="snowFar" width="40" height="52" patternUnits="userSpaceOnUse" fill="#fff">
+      <circle cx="7" cy="8" r="1.4"/><circle cx="26" cy="22" r="1.1"/><circle cx="14" cy="40" r="1.3"/><circle cx="34" cy="46" r="1.2"/>
+    </pattern>
+    <pattern id="snowNear" width="64" height="80" patternUnits="userSpaceOnUse" fill="#fff">
+      <circle cx="10" cy="12" r="2.6"/><circle cx="42" cy="30" r="2.1"/><circle cx="22" cy="58" r="3"/><circle cx="54" cy="70" r="2.3"/>
+    </pattern>
+    <linearGradient id="fogGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop id="fogS0" offset="0" stop-color="#dfe4ea" stop-opacity=".35"/><stop id="fogS1" offset="1" stop-color="#dfe4ea" stop-opacity=".95"/>
+    </linearGradient>
+    <linearGradient id="overGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop id="overS0" offset="0" stop-color="#9aa5b3" stop-opacity=".95"/><stop id="overS1" offset="1" stop-color="#9aa5b3" stop-opacity="0"/>
+    </linearGradient>
     <radialGradient id="lampglow" cx="50%" cy="50%" r="50%">
       <stop offset="0" stop-color="#ffd9a0" stop-opacity=".35"/><stop offset="1" stop-color="#ffd9a0" stop-opacity="0"/>
     </radialGradient>
@@ -200,10 +219,16 @@
         <g id="sunG"><circle id="sunGlow" r="50" fill="#ffe9a8" opacity=".25"/><circle id="sun" r="20" fill="#fff3c0"/></g>
         <g id="moonG"><path d="M0 -26 A26 26 0 1 0 0 26 A15 26 0 0 1 0 -26Z" fill="#f6efc8" transform="rotate(-24)"/></g>
         <g id="clouds" fill="#fff">
-          <g id="cloud1" opacity=".9"><ellipse cx="0" cy="0" rx="34" ry="11"/><ellipse cx="-18" cy="-8" rx="18" ry="11"/><ellipse cx="12" cy="-12" rx="20" ry="13"/></g>
-          <g id="cloud2" opacity=".75"><ellipse cx="0" cy="0" rx="26" ry="8"/><ellipse cx="-10" cy="-6" rx="13" ry="8"/><ellipse cx="10" cy="-8" rx="15" ry="9"/></g>
+          <g id="cloud1"><ellipse cx="0" cy="0" rx="34" ry="11"/><ellipse cx="-18" cy="-8" rx="18" ry="11"/><ellipse cx="12" cy="-12" rx="20" ry="13"/></g>
+          <g id="cloud2"><ellipse cx="0" cy="0" rx="26" ry="8"/><ellipse cx="-10" cy="-6" rx="13" ry="8"/><ellipse cx="10" cy="-8" rx="15" ry="9"/></g>
+          <g id="cloud3"><ellipse cx="0" cy="0" rx="40" ry="12"/><ellipse cx="-22" cy="-8" rx="20" ry="12"/><ellipse cx="16" cy="-13" rx="24" ry="14"/></g>
+          <g id="cloud4"><ellipse cx="0" cy="0" rx="32" ry="10"/><ellipse cx="-14" cy="-7" rx="16" ry="10"/><ellipse cx="14" cy="-9" rx="18" ry="11"/></g>
+          <g id="cloud5"><ellipse cx="0" cy="0" rx="46" ry="13"/><ellipse cx="-26" cy="-9" rx="22" ry="13"/><ellipse cx="20" cy="-14" rx="26" ry="15"/></g>
+          <g id="cloud6"><ellipse cx="0" cy="0" rx="38" ry="11"/><ellipse cx="-18" cy="-8" rx="19" ry="11"/><ellipse cx="18" cy="-10" rx="21" ry="12"/></g>
         </g>
+        <rect id="overcast" x="610" y="130" width="264" height="230" fill="url(#overGrad)" opacity="0"/>
         <path id="hills" d="M610 392 Q665 352 730 384 T874 372 V434 H610Z" fill="#4f9a5a"/>
+        <rect id="fogBack" x="610" y="250" width="264" height="184" fill="url(#fogGrad)" opacity="0"/>
         <g id="tree">
           <g id="limbs" fill="none" stroke="#6b4a2e" stroke-linecap="round">
             <path d="M850 434 C852 390 842 340 854 286" stroke-width="15"/>
@@ -223,6 +248,15 @@
           </g>
         </g>
         <g id="birds"></g>
+        <rect id="snowFarR" x="610" y="130" width="264" height="304" fill="url(#snowFar)" opacity="0"/>
+        <rect id="snowNearR" x="610" y="130" width="264" height="304" fill="url(#snowNear)" opacity="0"/>
+        <rect id="rainFarR" x="610" y="130" width="264" height="304" fill="url(#rainFar)" opacity="0"/>
+        <rect id="rainNearR" x="610" y="130" width="264" height="304" fill="url(#rainNear)" opacity="0"/>
+        <rect id="fogFront" x="610" y="130" width="264" height="304" fill="#dfe4ea" opacity="0"/>
+        <g id="boltG" opacity="0">
+          <rect x="610" y="130" width="264" height="304" fill="#eaf2ff"/>
+          <path id="boltPath" d="" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        </g>
       </g>
       <rect x="738" y="130" width="8" height="304" fill="#e8dcc8"/><rect x="610" y="278" width="264" height="8" fill="#e8dcc8"/>
       <path d="M560 100 L612 100 Q626 280 604 450 L560 450Z" fill="#8a4a5e"/>
@@ -1267,12 +1301,13 @@ async function decide() {
     else { await faceFront(); await wait(0.25); }
   } finally { busy = null; }
 }
-(async function life() {
+// Started on the next tick so every const further down the script (birds, weather) exists first.
+setTimeout(async function life() {
   for (;;) {
     try { await decide(); } catch (x) { if (x !== CANCEL) console.error(x); }
     await new Promise((r) => setTimeout(r, 30));
   }
-})();
+}, 0);
 
 function onAct(actions) {
   if (busy && !busy.commanded) cancelAll();
@@ -1310,31 +1345,81 @@ const hourNow = () => {
 const daylightAt = (h) => (h < 5.5 || h >= 20.5 ? 0 : h < 7.5 ? (h - 5.5) / 2 : h < 17 ? 1 : 1 - (h - 17) / 3.5);
 let daylight = 1;
 
+/* ---- the weather outside: the real local weather (WMO code + cloud/wind), eased in gradually ---- */
+const WX = { cover: 0.3, rain: 0, snow: 0, fog: 0, storm: 0, wind: 0.12 };   // what we are showing
+let wxTarget = { ...WX };                                                      // what the harness reported
+function wxFor(code, cloud, wind) {
+  const t = { cover: clamp((cloud || 0) / 100, 0, 1), rain: 0, snow: 0, fog: 0, storm: 0, wind: clamp((wind || 0) / 45, 0, 1) };
+  const pick = (m, d) => (m[code] != null ? m[code] : d);
+  if (code === 45 || code === 48) { t.fog = code === 48 ? 1 : 0.85; t.cover = Math.max(t.cover, 0.9); }
+  else if (code >= 51 && code <= 57) { t.rain = code <= 53 ? 0.3 : 0.45; t.cover = Math.max(t.cover, 0.8); }
+  else if (code >= 61 && code <= 67) { t.rain = pick({ 61: 0.5, 63: 0.75, 65: 1, 66: 0.65, 67: 0.9 }, 0.6); t.cover = Math.max(t.cover, 0.9); }
+  else if (code >= 71 && code <= 77) { t.snow = pick({ 71: 0.4, 73: 0.7, 75: 1, 77: 0.35 }, 0.5); t.cover = Math.max(t.cover, 0.9); }
+  else if (code >= 80 && code <= 82) { t.rain = pick({ 80: 0.5, 81: 0.75, 82: 1 }, 0.6); t.cover = Math.max(t.cover, 0.85); }
+  else if (code === 85 || code === 86) { t.snow = code === 85 ? 0.55 : 0.95; t.cover = Math.max(t.cover, 0.85); }
+  else if (code >= 95) { t.rain = code === 95 ? 0.75 : 1; t.storm = code === 95 ? 0.7 : 1; t.cover = Math.max(t.cover, 0.95); }
+  else if (code === 3) t.cover = Math.max(t.cover, 0.9);
+  else if (code === 2) t.cover = clamp(t.cover, 0.3, 0.65);
+  else if (code === 1) t.cover = clamp(t.cover, 0.1, 0.3);
+  else if (code === 0) t.cover = Math.min(t.cover, 0.12);
+  return t;
+}
+function setWeather(m, snap) {
+  wxTarget = wxFor(m.code, m.cloud, m.wind);
+  if (snap) { Object.assign(WX, wxTarget); updateSky(); }
+}
+const weatherFine = () => WX.rain < 0.1 && WX.snow < 0.1 && WX.storm < 0.1 && WX.fog < 0.6 && WX.wind < 0.7;
+const CLOUDS = [
+  { id: 'cloud1', min: 0.05, y: 186, v: 4.0, off: 0, o: 0.9 },
+  { id: 'cloud2', min: 0.14, y: 238, v: 2.6, off: 190, o: 0.75 },
+  { id: 'cloud3', min: 0.3, y: 162, v: 3.2, off: 300, o: 0.9 },
+  { id: 'cloud4', min: 0.45, y: 262, v: 2.2, off: 90, o: 0.85 },
+  { id: 'cloud5', min: 0.6, y: 206, v: 1.8, off: 380, o: 0.9 },
+  { id: 'cloud6', min: 0.75, y: 290, v: 2.9, off: 240, o: 0.85 },
+];
+
 function updateSky() {
-  const h = hourNow(), [top, bot] = skyAt(h), d = clamp(daylightAt(h), 0, 1), n = 1 - d;
+  const h = hourNow(), [top0, bot0] = skyAt(h), d = clamp(daylightAt(h), 0, 1), n = 1 - d;
   daylight = d;
+  // cloud turns the sky grey (and darker still in a storm); the sun, moon and stars fade behind it
+  const g = clamp(WX.cover * 0.9, 0, 0.92), clear = 1 - clamp((WX.cover - 0.1) * 1.15, 0, 0.97);
+  const gTop = mixHex(mixHex('#141a2a', '#9aa5b3', d), '#454c58', WX.storm * 0.65 * d);
+  const gBot = mixHex(mixHex('#1c2334', '#c3cad3', d), '#69717d', WX.storm * 0.6 * d);
+  const top = mixHex(top0, gTop, g), bot = mixHex(bot0, gBot, g);
   $('skyTop').setAttribute('stop-color', top); $('skyBot').setAttribute('stop-color', bot);
-  $('stars').setAttribute('opacity', clamp(n * 1.4 - 0.25, 0, 1).toFixed(2));
+  $('overS0').setAttribute('stop-color', gTop); $('overS1').setAttribute('stop-color', gTop);
+  $('overcast').setAttribute('opacity', clamp((WX.cover - 0.45) / 0.5, 0, 1).toFixed(2));
+  $('stars').setAttribute('opacity', (clamp(n * 1.4 - 0.25, 0, 1) * (1 - clamp(WX.cover * 1.3, 0, 1))).toFixed(2));
   // sun: rises on the left at 06:00, sets on the right at 18:00
   const st = clamp((h - 6) / 12, 0, 1), low = 1 - Math.sin(Math.PI * st), sunUp = h > 5.7 && h < 19.3;
-  $('sunG').setAttribute('opacity', sunUp ? clamp(Math.min(h - 5.7, 19.3 - h) * 2, 0, 1).toFixed(2) : 0);
+  $('sunG').setAttribute('opacity', sunUp ? (clamp(Math.min(h - 5.7, 19.3 - h) * 2, 0, 1) * clear).toFixed(2) : 0);
   $('sunG').setAttribute('transform', `translate(${(630 + 230 * st).toFixed(1)} ${(412 - 262 * Math.sin(Math.PI * st)).toFixed(1)})`);
   $('sun').setAttribute('fill', mixHex('#fff3c0', '#ff8f3a', low * low));
   $('sunGlow').setAttribute('fill', mixHex('#ffe9a8', '#ff7a2a', low * low));
   // moon: up from about 18:30 to 05:30, crossing right to left
   const mt = clamp(((h - 18.3 + 24) % 24) / 11.4, 0, 1), moonUp = h >= 18.3 || h < 5.7;
-  $('moonG').setAttribute('opacity', moonUp ? clamp(n * 2, 0, 1).toFixed(2) : 0);
+  $('moonG').setAttribute('opacity', moonUp ? (clamp(n * 2, 0, 1) * clear).toFixed(2) : 0);
   $('moonG').setAttribute('transform', `translate(${(860 - 230 * mt).toFixed(1)} ${(405 - 250 * Math.sin(Math.PI * mt)).toFixed(1)})`);
   // the land, the tree and the clouds follow the light
-  $('hills').setAttribute('fill', mixHex('#10202a', '#4f9a5a', d));
-  $('limbs').setAttribute('stroke', mixHex('#1e150e', '#6b4a2e', d));
-  $('leaves').setAttribute('fill', mixHex('#0f2b2b', '#3f9b4f', d));
-  $('leavesHi').setAttribute('fill', mixHex('#143a38', '#56b565', d));
-  $('clouds').setAttribute('fill', mixHex('#7d88b8', '#ffffff', clamp(d * 1.2, 0, 1)));
+  const murk = clamp(WX.cover * 0.28 + WX.storm * 0.12 + WX.fog * 0.1, 0, 0.4);   // everything looks flatter under cloud
+  const dull = (c) => mixHex(c, '#262c34', murk);
+  $('hills').setAttribute('fill', dull(mixHex('#10202a', '#4f9a5a', d)));
+  $('limbs').setAttribute('stroke', dull(mixHex('#1e150e', '#6b4a2e', d)));
+  $('leaves').setAttribute('fill', dull(mixHex('#0f2b2b', '#3f9b4f', d)));
+  $('leavesHi').setAttribute('fill', dull(mixHex('#143a38', '#56b565', d)));
+  const dayCloud = mixHex('#ffffff', mixHex('#b8c0cb', '#667080', WX.storm), clamp(WX.cover * 1.1, 0, 1));
+  const nightCloud = mixHex('#7d88b8', '#3a4058', WX.cover);
+  $('clouds').setAttribute('fill', mixHex(nightCloud, dayCloud, clamp(d * 1.2, 0, 1)));
   $('clouds').setAttribute('opacity', (0.12 + 0.8 * d).toFixed(2));
+  for (const c of CLOUDS) $(c.id).setAttribute('opacity', (c.o * clamp((WX.cover - c.min) / 0.18, 0, 1)).toFixed(2));
+  const fogCol = mixHex('#2b3142', '#dfe4ea', d);
+  $('fogS0').setAttribute('stop-color', fogCol); $('fogS1').setAttribute('stop-color', fogCol);
+  $('fogBack').setAttribute('opacity', (WX.fog * 0.92).toFixed(2));
+  $('fogFront').setAttribute('fill', fogCol); $('fogFront').setAttribute('opacity', (WX.fog * 0.28).toFixed(2));
   // the room: dark and lamplit at night, warm at dawn and dusk
   const warm = d > 0.03 && d < 0.97 ? Math.max(0, 1 - Math.abs(d - 0.5) * 2.2) : 0;
-  $('ambNight').setAttribute('opacity', (0.34 * n).toFixed(3));
+  const gloom = clamp(WX.cover * 0.55 + WX.storm * 0.3 + WX.rain * 0.15, 0, 0.8);   // a grey day dims the room
+  $('ambNight').setAttribute('opacity', (0.34 * n + 0.17 * gloom * d).toFixed(3));
   $('ambWarm').setAttribute('opacity', (0.13 * warm).toFixed(3));
   $('lampGlow').setAttribute('opacity', (0.25 + 0.75 * n).toFixed(2));
 }
@@ -1385,7 +1470,7 @@ function onBirdPerched() {
 }
 
 function birdsStep(t, dt) {
-  if (!document.hidden && daylight > 0.3 && !birds.length && t > nextBirdAt) spawnBirds();
+  if (!document.hidden && daylight > 0.3 && weatherFine() && !birds.length && t > nextBirdAt) spawnBirds();
   for (const b of [...birds]) {
     b.t += dt;
     let x, y, flap = false, tilt = 0, face = b.face;
@@ -1442,10 +1527,55 @@ async function chatterAtBirds() {
   }
 }
 
-function skyStep(t) {
-  const x1 = ((t * 4) % 380) + 570, x2 = ((t * 2.6 + 190) % 380) + 570;
-  $('cloud1').setAttribute('transform', `translate(${x1.toFixed(1)} 186)`);
-  $('cloud2').setAttribute('transform', `translate(${x2.toFixed(1)} 238)`);
+let wxAcc = 0, cloudPh = 0, nextBolt = 0, boltT0 = -9;
+const wxPh = { rf: 0, rn: 0, sf: 0, sn: 0 };
+function skyStep(t, dt) {
+  // ease towards the reported weather, repainting the sky while it is changing
+  const k = 1 - Math.exp(-dt * 0.5);
+  let moving = false;
+  for (const key in WX) {
+    const dlt = wxTarget[key] - WX[key];
+    if (Math.abs(dlt) > 0.002) { WX[key] += dlt * k; moving = true; } else WX[key] = wxTarget[key];
+  }
+  wxAcc += dt;
+  if (moving && wxAcc > 0.1) { wxAcc = 0; updateSky(); }
+
+  // clouds drift faster in a wind and look bigger the more of them there are
+  cloudPh += dt * (1 + WX.wind * 2.5);
+  const sc = 1 + WX.cover * 0.7;
+  for (const c of CLOUDS) {
+    const x = ((cloudPh * c.v + c.off) % 480) + 500;
+    $(c.id).setAttribute('transform', `translate(${x.toFixed(1)} ${c.y}) scale(${sc.toFixed(2)})`);
+  }
+
+  // the tree sways in the wind
+  const sway = WX.wind * 2.4 * (sin(t * 1.3) + 0.6 * sin(t * 2.9 + 1.3)) + 0.15 * sin(t * 0.8);
+  $('tree').setAttribute('transform', `rotate(${sway.toFixed(2)} 850 434)`);
+
+  // rain and snow are scrolling patterns, slanted by the wind
+  const slant = -(3 + WX.wind * 22), fall = 0.8 + WX.rain * 0.4;
+  wxPh.rf = (wxPh.rf + dt * 230 * fall) % 46; wxPh.rn = (wxPh.rn + dt * 430 * fall) % 84;
+  wxPh.sf = (wxPh.sf + dt * 38) % 52; wxPh.sn = (wxPh.sn + dt * 66) % 80;
+  $('rainFar').setAttribute('patternTransform', `rotate(${slant.toFixed(1)}) translate(0 ${wxPh.rf.toFixed(1)})`);
+  $('rainNear').setAttribute('patternTransform', `rotate(${slant.toFixed(1)}) translate(0 ${wxPh.rn.toFixed(1)})`);
+  const drift = (1 + WX.wind * 3) * 9;
+  $('snowFar').setAttribute('patternTransform', `translate(${(sin(t * 0.7) * drift).toFixed(1)} ${wxPh.sf.toFixed(1)})`);
+  $('snowNear').setAttribute('patternTransform', `translate(${(sin(t * 0.55 + 2) * drift * 1.4).toFixed(1)} ${wxPh.sn.toFixed(1)})`);
+  $('rainFarR').setAttribute('opacity', clamp(WX.rain * 1.7, 0, 0.75).toFixed(2));
+  $('rainNearR').setAttribute('opacity', clamp((WX.rain - 0.3) * 1.5, 0, 0.85).toFixed(2));
+  $('snowFarR').setAttribute('opacity', clamp(WX.snow * 1.7, 0, 0.9).toFixed(2));
+  $('snowNearR').setAttribute('opacity', clamp((WX.snow - 0.25) * 1.6, 0, 0.95).toFixed(2));
+
+  // lightning: a double flash and a jagged bolt every so often in a storm
+  if (WX.storm > 0.25 && t > nextBolt) {
+    boltT0 = t; nextBolt = t + rnd(5, 14) / (0.5 + WX.storm);
+    let x = rnd(650, 840), d = `M${x.toFixed(0)} 130`;
+    for (let y = 164; y < 340; y += 34) { x += rnd(-20, 20); d += ` L${x.toFixed(0)} ${y}`; }
+    $('boltPath').setAttribute('d', d);
+  }
+  const bt = t - boltT0;
+  const bo = bt < 0 || bt > 0.6 ? 0 : bt < 0.06 ? 0.75 : bt < 0.12 ? 0.1 : bt < 0.2 ? 0.55 : 0.3 * (1 - (bt - 0.2) / 0.4);
+  $('boltG').setAttribute('opacity', bo.toFixed(2));
 }
 
 /* =========================================================
@@ -1463,7 +1593,7 @@ function frame(ms) {
     if (blinkT >= 0) blink = sin(clamp((t - blinkT) / 0.16, 0, 1) * PI);
     sideRender(t, ms, dt, blink);
     if (Cat.mode === 'sleep' || vis.sleep > 0.01) sleepRender(t);
-    skyStep(t); birdsStep(t, dt);
+    skyStep(t, dt); birdsStep(t, dt);
     place();
     updateCamera(dt);
     // TV: flickers while she watches, otherwise glows softly when there's an artefact on it
@@ -1591,6 +1721,7 @@ function handle(m) {
     case 'cat': setState(m.state); break;
     case 'privacy': setMuted(m.muted); break;
     case 'online': document.body.classList.toggle('offline', !m.online); break;
+    case 'weather': setWeather(m); break;
     case 'heard': showHeard(m.text); break;
     case 'say': showCaption(m.text); break;
     case 'mouth': mouthIn = m.level; mouthAt = performance.now(); break;
@@ -1657,7 +1788,7 @@ $('pip').addEventListener('click', pet);
 $('tvlabel').addEventListener('click', () => { if (lastArt) send({ type: 'show', id: lastArt.id }); });
 
 /* Debug handle for poking the room from the console, e.g. room.act('scratch') */
-window.room = { Cat, ACTS, queue, pose, onAct, spawnBirds, birds, setHour: (h) => { hourOverride = h; updateSky(); }, setSleep: (p) => { sleepPlace = p; }, get state() { return catState; }, setState };
+window.room = { Cat, ACTS, queue, pose, onAct, spawnBirds, birds, setHour: (h) => { hourOverride = h; updateSky(); }, setWeather, WX, setSleep: (p) => { sleepPlace = p; }, get state() { return catState; }, setState };
 setMuted(false);
 connect();
 
