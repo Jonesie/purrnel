@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "purrnel",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/dev.sh"],
+      "port": 7979
+    },
+    {
+      "name": "purrnel-mock",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "trap 'kill 0' EXIT; python3 tools/mock_anthropic.py 8999 & PURRNEL_API_URL=http://127.0.0.1:8999/v1/messages ANTHROPIC_API_KEY=test PURRNEL_DATA=/tmp/purrnel-test PURRNEL_FALLBACKS=0 scripts/dev.sh"
+      ],
+      "port": 7979
+    }
+  ]
+}

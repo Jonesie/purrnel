@@ -1,0 +1,1666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Purrnel</title>
+<style>
+
+  :root {
+    color-scheme: dark;
+    --bg-1: #2b2142;
+    --bg-2: #130f1f;
+    --ink: #f6efe6;
+    --ink-dim: #b8aec4;
+    --accent: #ffb86b;
+    --danger: #ff6b7a;
+    --ok: #7ee0a1;
+    --panel: rgba(255, 255, 255, 0.07);
+    --panel-line: rgba(255, 255, 255, 0.14);
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(120% 90% at 50% 20%, var(--bg-1), var(--bg-2));
+    color: var(--ink);
+    font-family: ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+  /* ---- stage: cat + artefact ---- */
+
+  #viewport {
+    position: absolute; left: 16px; right: 16px; top: 72px; bottom: 150px;
+    background: #0e0b16; border: 1px solid var(--panel-line); border-radius: var(--radius);
+    overflow: hidden; display: none; z-index: 2; box-shadow: 0 20px 60px rgba(0,0,0,.45);
+  }
+  body.with-art #viewport { display: flex; flex-direction: column; }
+  #vp-bar {
+    display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--panel-line); font-size: 15px;
+  }
+  #vp-title { flex: 1; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #vp-ver { color: var(--ink-dim); font-size: 13px; }
+  #frame { flex: 1; width: 100%; border: 0; background: #fff0; }
+
+  /* ---- chrome ---- */
+  .chip {
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 999px;
+    padding: 8px 14px; font-size: 14px; color: var(--ink-dim); backdrop-filter: blur(8px);
+  }
+  #topleft { position: fixed; left: 16px; top: 16px; display: flex; gap: 10px; align-items: center; z-index: 5; }
+  #brand { font-weight: 800; color: var(--ink); letter-spacing: .02em; }
+  #stateline { min-width: 8ch; }
+  #offline { display: none; color: #ffd6a0; border-color: #ffb86b66; }
+  body.offline #offline { display: inline-flex; }
+  #conn { display: none; color: var(--danger); }
+  body.disconnected #conn { display: inline-flex; }
+
+  #topright { position: fixed; right: 16px; top: 16px; display: flex; gap: 10px; align-items: center; z-index: 5; }
+  .btn {
+    background: var(--panel); border: 1px solid var(--panel-line); border-radius: 999px;
+    min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:hover { background: rgba(255,255,255,.13); }
+  #mute { min-width: 56px; min-height: 56px; padding: 0 18px 0 14px; position: relative; }
+  #mute .ring {
+    position: absolute; left: 6px; top: 50%; width: 36px; height: 36px; margin-top: -18px; border-radius: 50%;
+    background: var(--ok); opacity: .0; transform: scale(1); transition: opacity .15s; z-index: -1;
+  }
+  #mute svg { width: 28px; height: 28px; flex: none; }
+  #mute .slash { display: none; }
+  body.muted #mute { border-color: #ff6b7a88; background: rgba(255,107,122,.14); }
+  body.muted #mute .slash { display: block; }
+  #mute-label { font-size: 14px; }
+
+  #drawer {
+    position: fixed; right: 16px; top: 84px; width: min(320px, calc(100vw - 32px)); max-height: 60vh; overflow: auto;
+    background: rgba(24, 18, 38, .96); border: 1px solid var(--panel-line); border-radius: var(--radius);
+    padding: 8px; display: none; z-index: 6; box-shadow: 0 20px 50px rgba(0,0,0,.5);
+  }
+  #drawer.open { display: block; }
+  #drawer h2 { margin: 8px 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-dim); }
+  #drawer button { width: 100%; text-align: left; background: transparent; border: 0; border-radius: 12px; padding: 12px; min-height: 44px; }
+  #drawer button:hover { background: rgba(255,255,255,.1); }
+  #drawer .meta { color: var(--ink-dim); font-size: 12px; }
+  #drawer .empty { padding: 12px; color: var(--ink-dim); }
+
+  /* ---- subtitles ---- */
+  #speech {
+    position: fixed; left: 0; right: 0; bottom: 70px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 0 24px; pointer-events: none; z-index: 4; transition: padding .6s;
+  }
+  body.with-art #speech { padding-left: calc(min(24vh, 200px) + 40px); }
+  #heard { font-size: 15px; color: var(--ink-dim); font-style: italic; opacity: 0; transition: opacity .5s; max-width: 70ch; text-align: center; }
+  #caption {
+    font-size: clamp(20px, 3.2vh, 34px); line-height: 1.3; font-weight: 700; text-align: center; max-width: 34ch;
+    opacity: 0; transition: opacity .5s; text-shadow: 0 2px 18px rgba(0,0,0,.6);
+  }
+  #heard.show, #caption.show { opacity: 1; }
+
+  /* ---- keyboard (secondary) ---- */
+  #typebar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); z-index: 5; }
+  #typebar input {
+    width: 100%; min-height: 44px; border-radius: 999px; border: 1px solid var(--panel-line);
+    background: rgba(255,255,255,.05); color: var(--ink); font: inherit; font-size: 15px; padding: 0 18px; opacity: .55; transition: opacity .2s, background .2s;
+  }
+  #typebar input::placeholder { color: var(--ink-dim); }
+  #typebar input:focus { opacity: 1; background: rgba(255,255,255,.1); outline: 2px solid var(--accent); }
+  body.with-art #typebar { left: calc(min(24vh, 200px) + 40px + 16px); transform: none; width: min(560px, calc(100vw - min(24vh, 200px) - 72px)); }
+
+  /* ---- confirm + toast + camera flash ---- */
+  #confirm {
+    position: fixed; inset: 0; display: none; place-items: center; background: rgba(8,5,16,.6); z-index: 20; backdrop-filter: blur(4px);
+  }
+  #confirm.open { display: grid; }
+  #confirm .box { background: #211a33; border: 1px solid var(--panel-line); border-radius: 22px; padding: 28px; width: min(460px, calc(100vw - 32px)); text-align: center; }
+  #confirm p { font-size: 20px; line-height: 1.4; margin: 0 0 22px; }
+  #confirm .row { display: flex; gap: 12px; justify-content: center; }
+  #confirm .btn { min-width: 120px; justify-content: center; min-height: 52px; font-weight: 700; }
+  #confirm .yes { background: rgba(255,107,122,.2); border-color: #ff6b7a99; }
+  #confirm small { display: block; margin-top: 14px; color: var(--ink-dim); }
+  #toast {
+    position: fixed; left: 50%; top: 20px; transform: translate(-50%, -80px); background: #2a2140; border: 1px solid var(--panel-line);
+    border-radius: 999px; padding: 10px 18px; z-index: 30; transition: transform .3s; font-size: 14px;
+  }
+  #toast.show { transform: translate(-50%, 0); }
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 40; transition: opacity .35s; }
+  #flash.on { opacity: .55; transition: none; }
+
+  @media (max-width: 640px) {
+    #mute-label, #brand { display: none; }
+    #viewport { top: 70px; bottom: 170px; }
+  }
+
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: #1d1630; }
+  #stage { pointer-events: none; }
+  #viewport { pointer-events: auto; }
+  #catWorld { cursor: pointer; }
+  #pip {
+    position: fixed; left: 12px; bottom: 10px; width: min(24vh, 200px); display: none; z-index: 3; cursor: pointer;
+  }
+  body.with-art #pip { display: block; }
+  #tvlabel { cursor: pointer; }
+</style>
+</head>
+<body>
+
+<svg id="scene" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid meet" aria-label="The lounge room where Purrnel lives">
+  <defs>
+    <clipPath id="winClip"><rect x="610" y="130" width="264" height="304"/></clipPath>
+    <clipPath id="eyeclip"><ellipse cx="0" cy="0" rx="24" ry="28"/></clipPath>
+    <radialGradient id="furshade" cx="50%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#ffb764"/><stop offset="1" stop-color="#ec8f32"/>
+    </radialGradient>
+    <path id="heart" d="M0 7 C-16 -4 -11 -17 0 -9 C11 -17 16 -4 0 7Z"/>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b2f5a"/><stop offset="1" stop-color="#4a3a6b"/>
+    </linearGradient>
+    <pattern id="stripes" width="90" height="10" patternUnits="userSpaceOnUse">
+      <rect width="45" height="10" fill="#fff" opacity=".035"/>
+    </pattern>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8a5f42"/><stop offset="1" stop-color="#5f3f2b"/>
+    </linearGradient>
+    <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+      <stop id="skyTop" offset="0" stop-color="#101a3e"/><stop id="skyBot" offset="1" stop-color="#2b3a73"/>
+    </linearGradient>
+    <radialGradient id="lampglow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffd9a0" stop-opacity=".35"/><stop offset="1" stop-color="#ffd9a0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ===== the room ===== -->
+  <g id="bg">
+    <rect x="-1500" y="-800" width="4600" height="1560" fill="url(#wall)"/>
+    <rect x="-1500" y="-800" width="4600" height="1560" fill="url(#stripes)"/>
+    <rect x="-1500" y="600" width="4600" height="150" fill="#2c2340"/>
+    <rect x="-1500" y="594" width="4600" height="10" fill="#54456f"/>
+    <rect x="-1500" y="738" width="4600" height="16" fill="#e8dcc8"/>
+    <rect x="-1500" y="754" width="4600" height="1000" fill="url(#floor)"/>
+    <g stroke="#000" stroke-opacity=".18" stroke-width="2">
+      <path d="M-1500 800H3100M-1500 850H3100M-1500 910H3100M-1500 985H3100M-1500 1080H3100"/>
+      <path d="M100 754V800M420 754V800M740 754V800M1060 754V800M1380 754V800M1700 754V800
+               M260 800V850M580 800V850M900 800V850M1220 800V850M1540 800V850
+               M60 850V910M400 850V910M740 850V910M1080 850V910M1420 850V910M1760 850V910"/>
+    </g>
+    <!-- window: the real time of day, a tree and the odd bird -->
+    <g id="windowArt">
+      <rect x="596" y="116" width="292" height="332" rx="8" fill="#e8dcc8"/>
+      <g clip-path="url(#winClip)">
+        <rect x="610" y="130" width="264" height="304" fill="url(#night)"/>
+        <g id="stars" fill="#fff">
+          <circle cx="650" cy="170" r="2"/><circle cx="780" cy="152" r="2.5"/><circle cx="840" cy="215" r="2"/>
+          <circle cx="690" cy="260" r="1.5"/><circle cx="815" cy="196" r="1.8"/><circle cx="640" cy="330" r="1.5"/>
+          <circle cx="720" cy="150" r="1.6"/><circle cx="665" cy="214" r="1.4"/><circle cx="760" cy="238" r="1.5"/>
+        </g>
+        <g id="sunG"><circle id="sunGlow" r="50" fill="#ffe9a8" opacity=".25"/><circle id="sun" r="20" fill="#fff3c0"/></g>
+        <g id="moonG"><path d="M0 -26 A26 26 0 1 0 0 26 A15 26 0 0 1 0 -26Z" fill="#f6efc8" transform="rotate(-24)"/></g>
+        <g id="clouds" fill="#fff">
+          <g id="cloud1" opacity=".9"><ellipse cx="0" cy="0" rx="34" ry="11"/><ellipse cx="-18" cy="-8" rx="18" ry="11"/><ellipse cx="12" cy="-12" rx="20" ry="13"/></g>
+          <g id="cloud2" opacity=".75"><ellipse cx="0" cy="0" rx="26" ry="8"/><ellipse cx="-10" cy="-6" rx="13" ry="8"/><ellipse cx="10" cy="-8" rx="15" ry="9"/></g>
+        </g>
+        <path id="hills" d="M610 392 Q665 352 730 384 T874 372 V434 H610Z" fill="#4f9a5a"/>
+        <g id="tree">
+          <g id="limbs" fill="none" stroke="#6b4a2e" stroke-linecap="round">
+            <path d="M850 434 C852 390 842 340 854 286" stroke-width="15"/>
+            <path d="M852 330 C822 306 770 298 690 262" stroke-width="9"/>
+            <path d="M848 304 C832 272 802 252 772 236" stroke-width="6"/>
+            <path d="M854 292 C862 252 852 214 838 184" stroke-width="6"/>
+          </g>
+          <g id="leaves" fill="#3f9b4f">
+            <circle cx="698" cy="252" r="16"/><circle cx="722" cy="262" r="13"/><circle cx="742" cy="248" r="14"/>
+            <circle cx="774" cy="232" r="17"/><circle cx="800" cy="244" r="14"/><circle cx="836" cy="190" r="17"/>
+            <circle cx="852" cy="212" r="16"/><circle cx="846" cy="244" r="15"/><circle cx="822" cy="174" r="15"/>
+            <circle cx="866" cy="262" r="15"/><circle cx="866" cy="302" r="15"/><circle cx="830" cy="268" r="13"/>
+          </g>
+          <g id="leavesHi" fill="#56b565" opacity=".8">
+            <circle cx="692" cy="246" r="8"/><circle cx="772" cy="226" r="9"/><circle cx="838" cy="184" r="9"/>
+            <circle cx="850" cy="206" r="8"/><circle cx="864" cy="258" r="8"/>
+          </g>
+        </g>
+        <g id="birds"></g>
+      </g>
+      <rect x="738" y="130" width="8" height="304" fill="#e8dcc8"/><rect x="610" y="278" width="264" height="8" fill="#e8dcc8"/>
+      <path d="M560 100 L612 100 Q626 280 604 450 L560 450Z" fill="#8a4a5e"/>
+      <path d="M924 100 L872 100 Q858 280 880 450 L924 450Z" fill="#8a4a5e"/>
+      <rect x="580" y="440" width="324" height="16" rx="4" fill="#e8dcc8"/>
+    </g>
+    <!-- pictures -->
+    <g>
+      <rect x="170" y="230" width="150" height="104" rx="4" fill="#e8dcc8"/><rect x="180" y="240" width="130" height="84" fill="#3d6f8f"/>
+      <path d="M180 324 L225 275 L255 305 L280 280 L310 324Z" fill="#2c4f66"/><circle cx="278" cy="262" r="10" fill="#f6efc8"/>
+      <rect x="1300" y="190" width="110" height="140" rx="4" fill="#e8dcc8"/><rect x="1310" y="200" width="90" height="120" fill="#7a4a5c"/>
+      <circle cx="1355" cy="250" r="24" fill="#f3a65a"/><path d="M1332 232 L1340 206 L1352 226Z M1378 226 L1370 206 L1360 226Z" fill="#f3a65a"/>
+    </g>
+    <!-- lamp glow + rug -->
+    <ellipse id="lampGlow" cx="1210" cy="640" rx="200" ry="150" fill="url(#lampglow)"/>
+    <ellipse cx="860" cy="824" rx="380" ry="48" fill="#7b3f4d"/>
+    <ellipse cx="860" cy="824" rx="340" ry="40" fill="none" stroke="#e8c79a" stroke-width="5" stroke-dasharray="3 14" stroke-linecap="round"/>
+    <ellipse cx="860" cy="824" rx="250" ry="28" fill="none" stroke="#e8c79a" stroke-width="3" opacity=".6"/>
+  </g>
+
+  <!-- ===== furniture, behind the cat ===== -->
+  <g id="furnBehind">
+    <!-- sofa back -->
+    <rect x="86" y="500" width="448" height="170" rx="40" fill="#2f6f7a"/>
+    <rect x="108" y="520" width="200" height="140" rx="26" fill="#3a8693"/>
+    <rect x="312" y="520" width="200" height="140" rx="26" fill="#3a8693"/>
+    <rect x="150" y="636" width="340" height="34" fill="#2a626c"/>
+    <!-- armchair back -->
+    <rect x="1272" y="480" width="216" height="190" rx="38" fill="#a8761e"/>
+    <rect x="1292" y="500" width="176" height="150" rx="28" fill="#c9962b"/>
+    <!-- plant -->
+    <path d="M1212 700 L1204 770 L1248 770 L1240 700Z" fill="#b5654a"/><rect x="1200" y="694" width="52" height="12" rx="4" fill="#c97a5c"/>
+    <path d="M1226 696 C1190 640 1190 600 1205 575 C1218 610 1228 640 1226 696Z" fill="#3f8f5a"/>
+    <path d="M1226 696 C1260 650 1275 610 1262 580 C1245 612 1232 650 1226 696Z" fill="#4aa56a"/>
+    <path d="M1226 696 C1226 640 1232 600 1226 560 C1218 600 1214 650 1226 696Z" fill="#348050"/>
+    <!-- coffee table -->
+    <rect x="626" y="716" width="14" height="54" fill="#6d4630"/><rect x="820" y="716" width="14" height="54" fill="#6d4630"/>
+    <rect x="636" y="748" width="188" height="8" fill="#6d4630"/>
+    <rect x="610" y="700" width="240" height="16" rx="6" fill="#8a5a3a"/>
+    <g id="mug" transform="translate(770 700)">
+      <path d="M11 -20 q13 0 13 9 q0 9 -13 9" fill="none" stroke="#f6efe6" stroke-width="4"/>
+      <rect x="-11" y="-26" width="22" height="26" rx="4" fill="#f6efe6"/>
+      <ellipse cx="0" cy="-24" rx="9" ry="2.6" fill="#6b3a14"/>
+      <path d="M-4 -34 q4 -6 0 -12 M4 -34 q4 -6 0 -12" stroke="#fff" stroke-opacity=".5" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    </g>
+    <!-- TV and stand -->
+    <rect x="900" y="704" width="280" height="66" rx="6" fill="#5a4030"/>
+    <path d="M1040 708 V766" stroke="#3a2a1e" stroke-width="3"/>
+    <circle cx="1028" cy="738" r="4" fill="#d9b88a"/><circle cx="1052" cy="738" r="4" fill="#d9b88a"/>
+    <rect x="960" y="690" width="40" height="14" fill="#15121c"/><rect x="1080" y="690" width="40" height="14" fill="#15121c"/>
+    <rect id="tvlabel" x="920" y="520" width="240" height="172" rx="9" fill="#15121c"/>
+    <rect id="tvScreen" x="931" y="531" width="218" height="124" rx="4" fill="#0c0a12"/>
+    <rect id="tvGlow" x="931" y="531" width="218" height="124" rx="4" fill="#7ee0a1" opacity="0"/>
+    <text id="tvTitle" x="1040" y="598" text-anchor="middle" font-size="17" font-weight="700" fill="#cfe9ff" opacity="0" font-family="ui-rounded, system-ui, sans-serif"></text>
+    <text id="tvPlay" x="1040" y="634" text-anchor="middle" font-size="13" fill="#cfe9ff" opacity="0" font-family="ui-rounded, system-ui, sans-serif">▶ click to open</text>
+    <circle cx="1148" cy="676" r="3" fill="#7ee0a1"/>
+  </g>
+
+  <!-- cat when she is on furniture -->
+  <g id="layerMid"></g>
+
+  <!-- furniture in front of a cat sitting on it -->
+  <g id="furnFront">
+    <rect x="150" y="648" width="340" height="72" rx="22" fill="#44a0ae"/>
+    <path d="M178 664 H462" stroke="#fff" stroke-opacity=".18" stroke-width="3" stroke-linecap="round"/>
+    <rect x="56" y="582" width="108" height="170" rx="34" fill="#2f6f7a"/><rect x="50" y="570" width="120" height="50" rx="24" fill="#3a8693"/>
+    <rect x="456" y="582" width="108" height="170" rx="34" fill="#2f6f7a"/><rect x="450" y="570" width="120" height="50" rx="24" fill="#3a8693"/>
+    <rect x="60" y="728" width="500" height="34" rx="10" fill="#1f4d55"/>
+    <rect x="80" y="758" width="22" height="16" rx="4" fill="#15323a"/><rect x="518" y="758" width="22" height="16" rx="4" fill="#15323a"/>
+    <path d="M530 640 l16 -4 M532 664 l16 -3 M530 690 l14 -2" stroke="#1f4d55" stroke-width="3" stroke-linecap="round" id="sofaScratches" opacity="0"/>
+
+    <rect x="1296" y="660" width="168" height="62" rx="20" fill="#deab3a"/>
+    <rect x="1250" y="600" width="62" height="152" rx="26" fill="#a8761e"/><rect x="1448" y="600" width="62" height="152" rx="26" fill="#a8761e"/>
+    <rect x="1256" y="740" width="248" height="26" rx="8" fill="#7a5514"/>
+  </g>
+
+  <!-- cat when she is on the floor -->
+  <g id="layerTop">
+    <g id="catWorld">
+      <!-- front-facing rig (used when she talks to you) -->
+      <g id="frontPlace"><g id="frontRig">
+        <ellipse id="shadow" cx="200" cy="420" rx="132" ry="13" fill="#000" opacity=".28"/>
+
+      <g id="root">
+        <!-- tail: two bones -->
+        <g id="tail1">
+          <path d="M290 338 C352 342 378 282 356 222" fill="none" stroke="#f39a3c" stroke-width="28" stroke-linecap="round"/>
+          <g id="tail2">
+            <path d="M356 222 C348 196 332 184 338 152" fill="none" stroke="#f39a3c" stroke-width="25" stroke-linecap="round"/>
+            <path d="M338 168 L338 152" stroke="#8a4a1b" stroke-width="26" stroke-linecap="round"/>
+            <path d="M351 205 q10 4 14 -2 M342 186 q9 3 12 -3" stroke="#c97424" stroke-width="5" stroke-linecap="round" fill="none"/>
+          </g>
+        </g>
+
+        <!-- body -->
+        <g id="body">
+          <ellipse cx="200" cy="326" rx="102" ry="84" fill="url(#furshade)"/>
+          <ellipse cx="200" cy="346" rx="62" ry="60" fill="#fff0d6"/>
+          <path d="M112 300 q14 4 22 -4 M108 328 q14 4 24 -4 M290 300 q-14 4 -22 -4 M294 328 q-14 4 -24 -4" stroke="#c97424" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <ellipse cx="128" cy="396" rx="36" ry="21" fill="#f39a3c"/>
+          <ellipse cx="272" cy="396" rx="36" ry="21" fill="#f39a3c"/>
+          <ellipse cx="124" cy="402" rx="26" ry="14" fill="#fff0d6"/>
+          <ellipse cx="276" cy="402" rx="26" ry="14" fill="#fff0d6"/>
+        </g>
+
+        <!-- head -->
+        <g id="head">
+          <g id="earL">
+            <path d="M108 172 L112 84 L178 140 Z" fill="#f39a3c" stroke="#f39a3c" stroke-width="10" stroke-linejoin="round"/>
+            <path d="M126 150 L128 108 L158 138 Z" fill="#ff9eb5" stroke="#ff9eb5" stroke-width="6" stroke-linejoin="round"/>
+          </g>
+          <g id="earR">
+            <path d="M292 172 L288 84 L222 140 Z" fill="#f39a3c" stroke="#f39a3c" stroke-width="10" stroke-linejoin="round"/>
+            <path d="M274 150 L272 108 L242 138 Z" fill="#ff9eb5" stroke="#ff9eb5" stroke-width="6" stroke-linejoin="round"/>
+          </g>
+          <ellipse cx="200" cy="190" rx="106" ry="88" fill="url(#furshade)"/>
+          <ellipse cx="116" cy="214" rx="36" ry="32" fill="#f39a3c"/>
+          <ellipse cx="284" cy="214" rx="36" ry="32" fill="#f39a3c"/>
+          <path d="M200 106 L200 128 M178 112 L182 130 M222 112 L218 130" stroke="#c97424" stroke-width="6" stroke-linecap="round" fill="none"/>
+          <path d="M104 178 q14 2 22 10 M104 198 q12 0 20 6 M296 178 q-14 2 -22 10 M296 198 q-12 0 -20 6" stroke="#c97424" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <ellipse cx="200" cy="226" rx="44" ry="30" fill="#fff0d6"/>
+          <ellipse id="blushL" cx="124" cy="226" rx="17" ry="10" fill="#ff7f9d" opacity=".4"/>
+          <ellipse id="blushR" cx="276" cy="226" rx="17" ry="10" fill="#ff7f9d" opacity=".4"/>
+
+          <!-- eyes -->
+          <g transform="translate(152 188)">
+            <g id="eyeL">
+              <ellipse rx="24" ry="28" fill="#fffdf8"/>
+              <g clip-path="url(#eyeclip)"><g id="gazeL">
+                <circle r="18" fill="#8fd24f"/><circle r="18" fill="none" stroke="#5aa12a" stroke-width="3"/>
+                <ellipse id="pupL" rx="8" ry="16" fill="#1c1426"/>
+                <circle cx="-6" cy="-8" r="5.5" fill="#fff"/><circle cx="6" cy="9" r="2.6" fill="#fff" opacity=".8"/>
+              </g></g>
+              <ellipse id="lidL" rx="27" ry="31" fill="#f39a3c"/>
+              <path id="sleepL" d="M-20 2 Q0 16 20 2" stroke="#6b3a14" stroke-width="5" fill="none" stroke-linecap="round" opacity="0"/>
+            </g>
+            <path id="arcL" d="M-21 8 Q0 -20 21 8" stroke="#6b3a14" stroke-width="6.5" fill="none" stroke-linecap="round" opacity="0"/>
+          </g>
+          <g transform="translate(248 188)">
+            <g id="eyeR">
+              <ellipse rx="24" ry="28" fill="#fffdf8"/>
+              <g clip-path="url(#eyeclip)"><g id="gazeR">
+                <circle r="18" fill="#8fd24f"/><circle r="18" fill="none" stroke="#5aa12a" stroke-width="3"/>
+                <ellipse id="pupR" rx="8" ry="16" fill="#1c1426"/>
+                <circle cx="-6" cy="-8" r="5.5" fill="#fff"/><circle cx="6" cy="9" r="2.6" fill="#fff" opacity=".8"/>
+              </g></g>
+              <ellipse id="lidR" rx="27" ry="31" fill="#f39a3c"/>
+              <path id="sleepR" d="M-20 2 Q0 16 20 2" stroke="#6b3a14" stroke-width="5" fill="none" stroke-linecap="round" opacity="0"/>
+            </g>
+            <path id="arcR" d="M-21 8 Q0 -20 21 8" stroke="#6b3a14" stroke-width="6.5" fill="none" stroke-linecap="round" opacity="0"/>
+          </g>
+
+          <!-- mouth -->
+          <ellipse id="mouthOpen" cx="200" cy="243" rx="15" ry="2" fill="#7a2335" opacity="0"/>
+          <ellipse id="tongue" cx="200" cy="247" rx="8" ry="1" fill="#ff8aa6" opacity="0"/>
+          <path id="mouthShut" d="M200 226 L200 236 M200 236 Q187 250 174 238 M200 236 Q213 250 226 238" stroke="#6b3a14" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path d="M188 214 Q200 210 212 214 Q210 226 200 228 Q190 226 188 214Z" fill="#ff8fb0" stroke="#ff8fb0" stroke-width="3" stroke-linejoin="round"/>
+
+          <g id="whiskL" stroke="#fff6e6" stroke-width="2.6" stroke-linecap="round" opacity=".9">
+            <path d="M156 232 L88 218"/><path d="M156 238 L84 238"/><path d="M158 244 L92 258"/>
+          </g>
+          <g id="whiskR" stroke="#fff6e6" stroke-width="2.6" stroke-linecap="round" opacity=".9">
+            <path d="M244 232 L312 218"/><path d="M244 238 L316 238"/><path d="M242 244 L308 258"/>
+          </g>
+        </g>
+
+        <!-- arms (in front) -->
+        <g id="armL">
+          <path d="M160 300 C152 334 150 362 152 388" fill="none" stroke="#f39a3c" stroke-width="36" stroke-linecap="round"/>
+          <ellipse cx="152" cy="392" rx="23" ry="16" fill="#fff0d6"/>
+          <path d="M143 396 v-7 M152 397 v-8 M161 396 v-7" stroke="#d9a77a" stroke-width="2.4" stroke-linecap="round"/>
+        </g>
+        <g id="armR">
+          <path d="M240 300 C248 334 250 362 248 388" fill="none" stroke="#f39a3c" stroke-width="36" stroke-linecap="round"/>
+          <ellipse cx="248" cy="392" rx="23" ry="16" fill="#fff0d6"/>
+          <path d="M239 396 v-7 M248 397 v-8 M257 396 v-7" stroke="#d9a77a" stroke-width="2.4" stroke-linecap="round"/>
+        </g>
+
+        <!-- effects -->
+        <g id="fxDots" fill="#fff" opacity="0">
+          <circle cx="296" cy="120" r="5"/><circle cx="318" cy="94" r="8"/><circle cx="348" cy="60" r="12"/>
+        </g>
+        <g id="fxZ" fill="#cfc4ff" font-weight="800" font-family="ui-rounded, system-ui, sans-serif" opacity="0">
+          <text id="z0" font-size="24">Z</text><text id="z1" font-size="30">Z</text><text id="z2" font-size="38">Z</text>
+        </g>
+        <g id="fxHearts" fill="#ff6b8b">
+          <use id="h0" href="#heart" opacity="0"/><use id="h1" href="#heart" opacity="0"/><use id="h2" href="#heart" opacity="0"/>
+        </g>
+        <g id="fxWifi" opacity="0" transform="translate(326 96)" fill="none" stroke="#ffd6a0" stroke-width="5" stroke-linecap="round">
+          <path d="M-26 -4 Q0 -26 26 -4"/><path d="M-16 8 Q0 -6 16 8"/><circle cx="0" cy="20" r="3" fill="#ffd6a0"/>
+          <path d="M-28 -26 L28 34" stroke="#ff6b7a"/>
+        </g>
+      </g>
+    
+      </g></g>
+
+      <!-- side-on rig (used for moving around). Origin: centre of her feet on the floor, facing right -->
+      <g id="sidePlace"><g id="sideRig">
+        <ellipse cx="0" cy="3" rx="96" ry="9" fill="#000" opacity=".28"/>
+        <g id="sRoot">
+          <g id="sBR">
+            <path d="M0 0 L0 40" stroke="#d98a30" stroke-width="19" stroke-linecap="round" fill="none"/>
+            <g id="sBRl"><path d="M0 0 L0 38" stroke="#d98a30" stroke-width="15" stroke-linecap="round" fill="none"/><ellipse cx="6" cy="40" rx="14" ry="8" fill="#ecd3b0"/></g>
+          </g>
+          <g id="sTorso">
+            <g id="sFR">
+              <path d="M0 0 L0 40" stroke="#d98a30" stroke-width="19" stroke-linecap="round" fill="none"/>
+              <g id="sFRl"><path d="M0 0 L0 38" stroke="#d98a30" stroke-width="15" stroke-linecap="round" fill="none"/><ellipse cx="5" cy="40" rx="13" ry="8" fill="#ecd3b0"/></g>
+            </g>
+            <g id="sT1">
+              <path d="M0 0 L-46 0" stroke="#f39a3c" stroke-width="22" stroke-linecap="round" fill="none"/>
+              <g id="sT2">
+                <path d="M0 0 L-42 0" stroke="#f39a3c" stroke-width="20" stroke-linecap="round" fill="none"/>
+                <g id="sT3">
+                  <path d="M0 0 L-34 0" stroke="#f39a3c" stroke-width="18" stroke-linecap="round" fill="none"/>
+                  <path d="M-26 0 L-36 0" stroke="#8a4a1b" stroke-width="19" stroke-linecap="round"/>
+                  <path d="M-30 -9 v18" stroke="#8a4a1b" stroke-width="3" opacity="0"/>
+                </g>
+                <path d="M-14 -9 v18 M-28 -8 v16" stroke="#c97424" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+              </g>
+              <path d="M-14 -9 v18 M-32 -9 v18" stroke="#c97424" stroke-width="4" stroke-linecap="round" opacity=".7"/>
+            </g>
+            <ellipse cx="-4" cy="-92" rx="82" ry="38" fill="url(#furshade)"/>
+            <ellipse cx="4" cy="-72" rx="60" ry="16" fill="#fff0d6"/>
+            <path d="M-40 -126 q4 14 -2 24 M-18 -128 q4 14 -2 26 M6 -128 q4 14 -2 26 M30 -124 q3 12 -2 22" stroke="#c97424" stroke-width="5" stroke-linecap="round" fill="none"/>
+            <ellipse cx="-52" cy="-76" rx="32" ry="36" fill="#f08f30"/>
+            <path d="M-72 -92 q8 6 6 18 M-60 -100 q8 6 6 20" stroke="#c97424" stroke-width="4" stroke-linecap="round" fill="none" opacity=".8"/>
+            <g id="sFL">
+              <path d="M0 0 L0 40" stroke="#f39a3c" stroke-width="21" stroke-linecap="round" fill="none"/>
+              <g id="sFLl"><path d="M0 0 L0 38" stroke="#f39a3c" stroke-width="17" stroke-linecap="round" fill="none"/><ellipse cx="6" cy="40" rx="14" ry="8" fill="#fff0d6"/></g>
+            </g>
+            <g id="sHead">
+              <path d="M0 0 L22 -14" stroke="#f39a3c" stroke-width="36" stroke-linecap="round"/>
+              <g id="sEarFar"><path d="M10 -36 L16 -68 L38 -42Z" fill="#d98a30" stroke="#d98a30" stroke-width="6" stroke-linejoin="round"/></g>
+              <ellipse cx="24" cy="-20" rx="33" ry="29" fill="url(#furshade)"/>
+              <ellipse cx="12" cy="-8" rx="22" ry="17" fill="#f39a3c"/>
+              <g id="sEar">
+                <path d="M-2 -38 L3 -72 L28 -45Z" fill="#f39a3c" stroke="#f39a3c" stroke-width="6" stroke-linejoin="round"/>
+                <path d="M5 -45 L7 -62 L19 -48Z" fill="#ff9eb5" stroke="#ff9eb5" stroke-width="3" stroke-linejoin="round"/>
+              </g>
+              <path d="M18 -46 v10 M28 -44 v9" stroke="#c97424" stroke-width="4" stroke-linecap="round"/>
+              <ellipse cx="47" cy="-10" rx="18" ry="13" fill="#fff0d6"/>
+              <ellipse cx="62" cy="-18" rx="5.5" ry="4.2" fill="#ff8fb0"/>
+              <ellipse id="sMouthOpen" cx="55" cy="-3" rx="8" ry="2" fill="#7a2335" opacity="0"/>
+              <ellipse id="sTongue" cx="55" cy="0" rx="5" ry="1" fill="#ff8aa6" opacity="0"/>
+              <path id="sMouthShut" d="M60 -13 Q59 -4 50 -3 M50 -3 Q44 -2 40 -6" stroke="#6b3a14" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+              <g transform="translate(36 -26)">
+                <g id="sEye">
+                  <ellipse rx="9.5" ry="11.5" fill="#fffdf8"/>
+                  <g clip-path="url(#sEyeClip)"><g id="sGaze"><circle r="8" fill="#8fd24f"/><ellipse id="sPup" rx="3.2" ry="8.5" fill="#1c1426"/><circle cx="-2.5" cy="-3.5" r="2.4" fill="#fff"/></g></g>
+                  <ellipse id="sLid" rx="11.5" ry="13.5" fill="#f39a3c"/>
+                </g>
+                <path id="sArc" d="M-9 4 Q0 -9 9 4" stroke="#6b3a14" stroke-width="3.4" fill="none" stroke-linecap="round" opacity="0"/>
+              </g>
+              <g stroke="#fff6e6" stroke-width="2.2" stroke-linecap="round" opacity=".9"><path d="M54 -8 L94 -19"/><path d="M55 -5 L96 -7"/><path d="M53 -2 L90 6"/></g>
+            </g>
+          </g>
+          <g id="sBL">
+            <path d="M0 0 L0 40" stroke="#f39a3c" stroke-width="21" stroke-linecap="round" fill="none"/>
+            <g id="sBLl"><path d="M0 0 L0 38" stroke="#f39a3c" stroke-width="17" stroke-linecap="round" fill="none"/><ellipse cx="6" cy="40" rx="15" ry="8" fill="#fff0d6"/></g>
+          </g>
+          <g id="sTuck"><ellipse cx="46" cy="-8" rx="17" ry="9" fill="#fff0d6"/><ellipse cx="64" cy="-6" rx="15" ry="8" fill="#ecd3b0"/></g>
+        </g>
+      </g></g>
+
+      <!-- curled up asleep -->
+      <g id="sleepPlace"><g id="sleepRig">
+        <ellipse cx="0" cy="3" rx="100" ry="9" fill="#000" opacity=".25"/>
+        <g id="slBody">
+          <ellipse cx="8" cy="-40" rx="90" ry="42" fill="url(#furshade)"/>
+          <path d="M-20 -78 q4 14 -2 24 M4 -80 q4 14 -2 26 M30 -78 q4 12 -2 22 M54 -72 q3 12 -2 20" stroke="#c97424" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <ellipse cx="52" cy="-34" rx="40" ry="30" fill="#f08f30"/>
+          <g transform="translate(-52 -40)">
+            <ellipse cx="0" cy="0" rx="36" ry="31" fill="url(#furshade)"/>
+            <path d="M-26 -18 L-30 -52 L-4 -30Z" fill="#f39a3c" stroke="#f39a3c" stroke-width="6" stroke-linejoin="round"/>
+            <path d="M26 -18 L30 -50 L6 -30Z" fill="#f39a3c" stroke="#f39a3c" stroke-width="6" stroke-linejoin="round"/>
+            <path d="M-24 -22 L-26 -42 L-12 -30Z" fill="#ff9eb5"/><path d="M24 -22 L26 -40 L12 -30Z" fill="#ff9eb5"/>
+            <ellipse cx="0" cy="12" rx="22" ry="14" fill="#fff0d6"/>
+            <path d="M-20 -4 Q-12 3 -4 -4 M4 -4 Q12 3 20 -4" stroke="#6b3a14" stroke-width="3.6" fill="none" stroke-linecap="round"/>
+            <ellipse cx="0" cy="5" rx="5" ry="3.6" fill="#ff8fb0"/>
+          </g>
+          <ellipse cx="-66" cy="-10" rx="22" ry="11" fill="#fff0d6"/>
+          <path d="M98 -26 C112 -4 40 8 -48 2" fill="none" stroke="#f39a3c" stroke-width="24" stroke-linecap="round"/>
+          <path d="M-30 4 L-50 2" stroke="#8a4a1b" stroke-width="25" stroke-linecap="round"/>
+          <path d="M60 -2 q-4 8 0 14 M30 2 q-3 8 1 13" stroke="#c97424" stroke-width="4" stroke-linecap="round" fill="none" opacity=".7"/>
+        </g>
+        <g id="slZ" fill="#cfc4ff" font-weight="800" font-family="ui-rounded, system-ui, sans-serif">
+          <text id="sz0" font-size="22">Z</text><text id="sz1" font-size="28">Z</text><text id="sz2" font-size="34">Z</text>
+        </g>
+      </g></g>
+    </g>
+  </g>
+
+  <!-- things that move on their own -->
+  <g id="props">
+    <g id="furball" opacity="0"><ellipse cx="0" cy="-8" rx="15" ry="10" fill="#9a7b5a"/><path d="M-12 -8 l-7 -4 M12 -9 l8 -5 M0 -17 l-2 -7 M-6 -2 l-6 4" stroke="#9a7b5a" stroke-width="3" stroke-linecap="round"/><ellipse cx="-4" cy="-11" rx="6" ry="3" fill="#b79a78"/></g>
+  </g>
+  <g id="ambient" pointer-events="none">
+    <rect id="ambNight" x="-1500" y="-800" width="4600" height="2600" fill="#0a0e38" opacity="0"/>
+    <rect id="ambWarm" x="-1500" y="-800" width="4600" height="2600" fill="#ff8a46" opacity="0"/>
+  </g>
+  <clipPath id="sEyeClip"><ellipse cx="0" cy="0" rx="9.5" ry="11.5"/></clipPath>
+</svg>
+
+<svg id="pip" viewBox="40 60 330 370" role="img" aria-label="Purrnel"><use href="#frontRig"/></svg>
+
+<div id="stage">
+  <section id="viewport" aria-label="Artefact">
+    <div id="vp-bar">
+      <span id="vp-title"></span><span id="vp-ver"></span>
+      <button class="btn" id="vp-close" aria-label="Close artefact">✕ Close</button>
+    </div>
+    <iframe id="frame" title="Artefact" sandbox="allow-scripts"></iframe>
+  </section>
+  <div id="speech" aria-live="polite">
+    <div id="heard"></div>
+    <div id="caption"></div>
+  </div>
+</div>
+
+<div id="topleft">
+  <span class="chip" id="brand">Purrnel</span>
+  <span class="chip" id="stateline">listening…</span>
+  <span class="chip" id="offline">Waiting for the internet…</span>
+  <span class="chip" id="conn">Reconnecting…</span>
+</div>
+
+<div id="topright">
+  <button class="btn" id="artefacts-btn" aria-expanded="false" aria-controls="drawer">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+    <span id="art-count">0</span>
+  </button>
+  <button class="btn" id="mute" aria-pressed="false" title="Mute microphone and camera (M)">
+    <span class="ring" id="ring"></span>
+    <svg viewBox="0 0 48 28" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="6" y="3" width="8" height="14" rx="4"/><path d="M3 13a7 7 0 0 0 14 0M10 20v4"/>
+      <rect x="24" y="8" width="14" height="12" rx="3"/><path d="M38 12l7-3v10l-7-3"/>
+      <path class="slash" d="M3 3L45 25" stroke="#ff6b7a" stroke-width="3.4"/>
+    </svg>
+    <span id="mute-label">Listening</span>
+  </button>
+</div>
+
+<div id="drawer" role="dialog" aria-label="Artefacts"><h2>Artefacts</h2><div id="drawer-list"></div></div>
+
+<form id="typebar" autocomplete="off">
+  <input id="type" type="text" placeholder="Just talk to me. (Keyboard works too — press / to type)" aria-label="Type to Purrnel">
+</form>
+
+<div id="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
+  <div class="box">
+    <p id="confirm-text"></p>
+    <div class="row">
+      <button class="btn yes" id="confirm-yes">Yes</button>
+      <button class="btn" id="confirm-no">No</button>
+    </div>
+    <small>You can also just say yes or no.</small>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+<div id="flash"></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const AMP = calm ? 0.35 : 1;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const smooth = (t) => t * t * (3 - 2 * t);
+const linear = (t) => t;
+
+const DEF = {
+  bodyX: 0, bodyY: 0, bodyRot: 0, squash: 1,
+  headX: 0, headY: 0, headRot: 0,
+  earL: 0, earR: 0,          // degrees outward (negative = perked in)
+  tail1: 0, tail2: 0,
+  armL: 0, armR: 0,          // shoulder rotation (see rig notes)
+  lid: 0,                    // resting eyelid closure 0..1
+  px: 0, py: 0, cross: 0, pscale: 1,
+  mouth: 0, whisk: 0, happy: 0,
+  dots: 0, zz: 0, hearts: 0, wifi: 0,
+};
+const RATE = { mouth: 28, lid: 14, happy: 14, squash: 9, bodyX: 6, bodyRot: 8, bodyY: 12, tail1: 14, tail2: 14, armL: 12, armR: 12, px: 16, py: 16 };
+const P = { ...DEF };
+
+const el = {};
+['root','body','head','earL','earR','tail1','tail2','armL','armR','eyeL','eyeR','gazeL','gazeR','pupL','pupR',
+ 'lidL','lidR','sleepL','sleepR','arcL','arcR','mouthOpen','mouthShut','tongue','whiskL','whiskR','shadow',
+ 'fxDots','fxZ','fxWifi','z0','z1','z2','h0','h1','h2','blushL','blushR'].forEach(k => el[k] = $(k));
+
+const sin = Math.sin, PI = Math.PI;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const twitch = (t, period) => { const ph = (t % period) / period; return ph < 0.035 ? sin(ph / 0.035 * PI) : 0; };
+
+let catState = 'idle';
+let emote = null;                 // { name, start, until }
+let mic = 0;                      // mic level 0..1
+let mouthIn = 0, mouthAt = -1e9;  // mouth level from harness audio
+let sayUntil = 0;                 // fallback lip-flap window
+let blinkAt = 2, blinkT = -1;
+let lookUntil = 0;
+
+function targetPose(t, now) {
+  const T = { ...DEF };
+  const s = sin;
+  switch (catState) {
+    case 'listening':
+      T.squash = 1 + 0.01 * s(t * 1.8); T.headRot = 7 + 2 * s(t * 1.2); T.headY = 4 - mic * 7;
+      T.earL = -9; T.earR = -9; T.pscale = 1.3; T.tail1 = 8 * s(t * 2); T.tail2 = 10 * s(t * 2 - 1);
+      break;
+    case 'thinking':
+      T.headRot = -7; T.px = 11; T.py = -9; T.armR = 152; T.tail1 = 20 * s(t * 0.8); T.tail2 = 26 * s(t * 0.8 - 1);
+      T.earL = 4; T.earR = -4; T.squash = 1 + 0.01 * s(t * 1.4); T.dots = 1;
+      break;
+    case 'talking': {
+      const fresh = now - mouthAt < 250;
+      const m = fresh ? clamp(mouthIn * 1.25, 0, 1) : (now < sayUntil ? 0.35 + 0.3 * s(t * 14) : 0);
+      T.mouth = m; T.headRot = 3 * s(t * 3.1); T.headY = -m * 3; T.squash = 1 + 0.012 * s(t * 2);
+      T.tail1 = 15 * s(t * 2.2); T.tail2 = 20 * s(t * 2.2 - 1); T.px = 4 * s(t * 0.8); T.whisk = 3 * s(t * 3);
+      break;
+    }
+    case 'sleeping':
+      T.lid = 1; T.headRot = 13; T.headY = 16; T.headX = -6; T.squash = 1 + 0.028 * s(t * 0.9);
+      T.earL = 20; T.earR = 20; T.tail1 = -6 + 3 * s(t * 0.5); T.tail2 = -10; T.zz = 1;
+      break;
+    case 'bored': {
+      T.pscale = 1.55; T.earL = 6; T.earR = 6;
+      const p = Math.floor(t / 4.5) % 4;
+      if (p === 0) { // chase the tail
+        T.headRot = 22 * s(t * 5) * AMP; T.tail1 = 38 * s(t * 8); T.tail2 = 45 * s(t * 8 - 0.5);
+        T.cross = 9; T.mouth = 0.3; T.bodyRot = 6 * s(t * 5) * AMP; T.earL = 10 * s(t * 7); T.earR = 10 * s(t * 7 + 1);
+      } else if (p === 1) { // zoomies
+        zoom(T, t);
+      } else if (p === 2) { // derp and wave
+        T.headRot = 26 * s(t * 1.5) * AMP; T.armL = 100 + 25 * s(t * 9); T.armR = -100 - 25 * s(t * 9 + 1);
+        T.mouth = 0.4 + 0.2 * s(t * 4); T.cross = -7; T.tail1 = 25 * s(t * 5);
+      } else { // wiggle
+        T.squash = 1 + 0.1 * s(t * 9) * AMP; T.tail1 = 45 * s(t * 12); T.tail2 = 35 * s(t * 12 - 1);
+        T.bodyRot = 5 * s(t * 9) * AMP; T.headRot = -12 * s(t * 4.5); T.py = -6; T.mouth = 0.25;
+        T.armL = 20 * s(t * 6); T.armR = -20 * s(t * 6);
+      }
+      break;
+    }
+    case 'tired': {
+      T.lid = 0.5 + 0.2 * s(t * 0.6); T.headRot = 5 + 5 * s(t * 0.5); T.headY = 8; T.earL = 14; T.earR = 14;
+      T.mouth = Math.pow(Math.max(0, s(t * 0.9 - 1)), 6) * 0.95; T.tail1 = -6; T.pscale = 0.9;
+      T.squash = 1 + 0.02 * s(t * 1.1);
+      break;
+    }
+    case 'waiting':
+      T.lid = 0.3; T.headRot = -4; T.headY = 8; T.earL = 16; T.earR = 16; T.tail1 = -8; T.tail2 = -14;
+      T.py = 7; T.squash = 1 + 0.008 * s(t * 1.0); T.wifi = 1;
+      break;
+    default: // idle
+      T.squash = 1 + 0.012 * s(t * 1.6); T.headRot = 2.5 * s(t * 0.7);
+      T.tail1 = 12 * s(t * 1.1); T.tail2 = 16 * s(t * 1.1 - 0.9);
+      T.px = 6 * s(t * 0.43); T.py = 2.5 * s(t * 0.31);
+      T.earL = twitch(t, 7.3) * 14; T.earR = twitch(t + 3.1, 9.1) * 14; T.whisk = 2 * s(t * 0.9);
+  }
+
+  if (now < lookUntil) { T.pscale = 1.5; T.headY = -4; T.px = 0; T.py = 0; T.headRot = 0; }
+
+  if (emote) {
+    if (now > emote.until) emote = null;
+    else {
+      const e = now - emote.start;
+      switch (emote.name) {
+        case 'happy':
+          T.happy = 1; T.tail1 = 30 * s(t * 5); T.tail2 = 36 * s(t * 5 - 1); T.bodyY = -Math.abs(7 * s(t * 6)) * AMP;
+          T.mouth = 0.18; T.hearts = 1; break;
+        case 'purr':
+          T.happy = 1; T.bodyX = 1.6 * s(t * 70) * AMP; T.squash = 1.02; T.hearts = 1; T.tail1 = 10 * s(t * 1.5);
+          T.headRot = 4 * s(t * 1.3); break;
+        case 'curious':
+          T.headRot = 16; T.pscale = 1.35; T.earL = -10; T.earR = -12; T.px = 9 * s(t * 1.2); T.tail2 = 30 * s(t * 3); break;
+        case 'wave':
+          T.armR = -125 + 20 * s(t * 8); T.mouth = 0.2; T.tail1 = 20 * s(t * 3); T.happy = 0; break;
+        case 'zoomies': zoom(T, t); break;
+        case 'sleepy': {
+          const y = clamp(sin(clamp(e / 3, 0, 1) * PI), 0, 1);
+          T.mouth = y; T.lid = 0.85 * y; T.headRot = -8 * y; T.headY = -6 * y; break;
+        }
+        case 'yawn': {
+          const y = clamp(sin(clamp(e / 2.4, 0, 1) * PI), 0, 1);
+          T.mouth = y; T.lid = 0.8 * y; T.headRot = -8 * y; T.headY = -5 * y; break;
+        }
+        case 'love':
+          T.happy = 1; T.hearts = 1; T.mouth = 0.12; T.tail1 = 22 * s(t * 3); T.headRot = 5 * s(t * 2);
+          T.bodyY = -Math.abs(4 * s(t * 4)) * AMP; break;
+        case 'hiss':
+          T.earL = 28; T.earR = 28; T.mouth = 0.9; T.pscale = 0.7; T.headRot = -4; T.bodyRot = 3 * s(t * 30) * AMP;
+          T.tail1 = 40; T.tail2 = 30; T.lid = 0.25; break;
+        case 'working':
+          T.armL = 12 + 10 * s(t * 11); T.armR = -12 - 10 * s(t * 11 + 3); T.headY = 8; T.py = 9; T.px = 5 * s(t * 3);
+          T.headRot = 2 * s(t * 2); T.dots = 1; T.tail1 = 14 * s(t * 3); break;
+      }
+    }
+  }
+  return T;
+}
+function zoom(T, t) {
+  const s = sin;
+  T.bodyX = 85 * s(t * 2.4) * AMP; T.bodyRot = 10 * s(t * 2.4 + 1.6) * AMP; T.bodyY = -Math.abs(18 * s(t * 7)) * AMP;
+  T.earL = 24; T.earR = 24; T.mouth = 0.45; T.tail1 = 30 * s(t * 10); T.px = 10 * Math.sign(Math.cos(t * 2.4)); T.pscale = 1.55;
+}
+
+const rot = (a, x, y) => `rotate(${a.toFixed(2)} ${x} ${y})`;
+
+function frontRender(t, now, dt) {
+  const T = targetPose(t, now);
+  for (const k in DEF) P[k] += (T[k] - P[k]) * (1 - Math.exp(-(RATE[k] || 10) * dt));
+
+  // blink (independent of pose)
+  if (t > blinkAt && blinkT < 0) blinkT = t;
+  let blink = 0;
+  if (blinkT >= 0) {
+    const ph = (t - blinkT) / 0.16;
+    if (ph >= 1) { blinkT = -1; blinkAt = t + 2 + Math.random() * 4; } else blink = sin(ph * PI);
+  }
+  const lid = clamp(Math.max(P.lid, blink) * (1 - P.happy), 0, 1);
+  const lidT = (el_, v) => el_.setAttribute('transform', `translate(0 -31) scale(1 ${v.toFixed(3)}) translate(0 31)`);
+  lidT(el.lidL, lid); lidT(el.lidR, lid);
+  el.eyeL.setAttribute('opacity', 1 - P.happy); el.eyeR.setAttribute('opacity', 1 - P.happy);
+  el.arcL.setAttribute('opacity', P.happy); el.arcR.setAttribute('opacity', P.happy);
+  const sl = clamp((P.lid - 0.75) / 0.25, 0, 1) * (1 - P.happy);
+  el.sleepL.setAttribute('opacity', sl); el.sleepR.setAttribute('opacity', sl);
+
+  // gaze
+  el.gazeL.setAttribute('transform', `translate(${(P.px + P.cross).toFixed(2)} ${P.py.toFixed(2)})`);
+  el.gazeR.setAttribute('transform', `translate(${(P.px - P.cross).toFixed(2)} ${P.py.toFixed(2)})`);
+  const ps = `scale(${P.pscale.toFixed(3)})`;
+  el.pupL.setAttribute('transform', ps); el.pupR.setAttribute('transform', ps);
+
+  // skeleton
+  el.root.setAttribute('transform', `translate(${P.bodyX.toFixed(1)} ${P.bodyY.toFixed(1)}) ${rot(P.bodyRot, 200, 400)}`);
+  el.shadow.setAttribute('transform', `translate(${P.bodyX.toFixed(1)} 0)`);
+  el.shadow.setAttribute('opacity', (0.28 + clamp(P.bodyY / 100, -0.2, 0)).toFixed(2));
+  el.body.setAttribute('transform', `translate(200 400) scale(1 ${P.squash.toFixed(4)}) translate(-200 -400)`);
+  const lift = -(P.squash - 1) * 120;
+  el.head.setAttribute('transform', `translate(${P.headX.toFixed(1)} ${(P.headY + lift).toFixed(1)}) ${rot(P.headRot, 200, 262)}`);
+  el.earL.setAttribute('transform', rot(-P.earL, 140, 150));
+  el.earR.setAttribute('transform', rot(P.earR, 260, 150));
+  el.tail1.setAttribute('transform', rot(P.tail1, 290, 338));
+  el.tail2.setAttribute('transform', rot(P.tail2, 356, 222));
+  el.armL.setAttribute('transform', rot(P.armL, 160, 300));
+  el.armR.setAttribute('transform', rot(P.armR, 240, 300));
+  el.whiskL.setAttribute('transform', rot(-P.whisk, 156, 238));
+  el.whiskR.setAttribute('transform', rot(P.whisk, 244, 238));
+
+  // mouth: closed "w" -> open oval with tongue
+  const m = clamp(P.mouth, 0, 1);
+  const open = m > 0.06;
+  el.mouthShut.setAttribute('opacity', open ? 0 : 1);
+  el.mouthOpen.setAttribute('opacity', open ? 1 : 0);
+  el.tongue.setAttribute('opacity', open && m > 0.2 ? 1 : 0);
+  const ry = 2 + 17 * m;
+  el.mouthOpen.setAttribute('ry', ry.toFixed(2));
+  el.mouthOpen.setAttribute('cy', (240 + ry * 0.55).toFixed(2));
+  el.tongue.setAttribute('ry', (ry * 0.42).toFixed(2));
+  el.tongue.setAttribute('cy', (240 + ry * 1.0).toFixed(2));
+
+  // effects
+  el.fxDots.setAttribute('opacity', P.dots);
+  [...el.fxDots.children].forEach((c, i) => c.setAttribute('opacity', 0.25 + 0.75 * Math.max(0, sin(t * 4 - i * 0.9))));
+  el.fxZ.setAttribute('opacity', P.zz);
+  [el.z0, el.z1, el.z2].forEach((z, i) => {
+    const ph = (t * 0.35 + i / 3) % 1;
+    z.setAttribute('x', 282 + ph * 46 + i * 8); z.setAttribute('y', 118 - ph * 74);
+    z.setAttribute('opacity', (sin(ph * PI)).toFixed(2));
+  });
+  [el.h0, el.h1, el.h2].forEach((h, i) => {
+    const ph = (t * 0.6 + i / 3) % 1;
+    const x = 200 + (i - 1) * 52 + 10 * sin(t * 3 + i), y = 110 - ph * 90, sc = 0.8 + 0.5 * sin(ph * PI);
+    h.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${sc.toFixed(2)})`);
+    h.setAttribute('opacity', (P.hearts * sin(ph * PI)).toFixed(2));
+  });
+  el.fxWifi.setAttribute('opacity', (P.wifi * (0.65 + 0.35 * sin(t * 2))).toFixed(2));
+  const blush = 0.4 + 0.3 * P.happy + (catState === 'bored' ? 0.1 : 0);
+  el.blushL.setAttribute('opacity', blush); el.blushR.setAttribute('opacity', blush);
+}
+
+
+
+/* =========================================================
+   The room, the side-on body, and the things a cat does
+   ========================================================= */
+const cos = Math.cos;
+const FS = 0.62;        // front rig scale in the room
+const SS = 1.1;         // side rig scale
+const FLOOR = 805;
+const scene = $('scene'), catWorld = $('catWorld'), layerMid = $('layerMid'), layerTop = $('layerTop');
+
+// Where she can stand. y is the surface her feet touch; floorX is where she waits on the floor to reach it.
+const PLACES = {
+  floor:    { y: FLOOR, minX: 90,   maxX: 1510, layer: 'top', floorX: 860 },
+  sofa:     { y: 652,   minX: 200,  maxX: 440,  layer: 'mid', floorX: 330 },
+  armchair: { y: 662,   minX: 1340, maxX: 1430, layer: 'mid', floorX: 1380 },
+  table:    { y: 700,   minX: 650,  maxX: 800,  layer: 'mid', floorX: 730 },
+  tv:       { y: 520,   minX: 965,  maxX: 1115, layer: 'mid', floorX: 1040 },
+  window:   { y: 440,   minX: 650,  maxX: 830,  layer: 'mid', floorX: 740 },
+  rug:      { y: FLOOR, minX: 860,  maxX: 860,  layer: 'top', floorX: 860 },
+  left:     { y: FLOOR, minX: 110,  maxX: 110,  layer: 'top', floorX: 110 },
+  right:    { y: FLOOR, minX: 1490, maxX: 1490, layer: 'top', floorX: 1490 },
+};
+const isFurniture = (n) => ['sofa', 'armchair', 'table', 'tv', 'window'].includes(n);
+
+const Cat = { x: 860, y: FLOOR, face: 1, surface: 'floor', mode: 'front' };
+const vis = { front: 1, side: 0, sleep: 0 };
+const gait = { mode: null, phase: 0, amount: 0 };
+
+function setSurface(name) {
+  Cat.surface = name;
+  const layer = PLACES[name].layer === 'mid' ? layerMid : layerTop;
+  if (catWorld.parentNode !== layer) layer.appendChild(catWorld);
+}
+setSurface('floor');
+
+/* ---- side-on rig ---- */
+const SDEF = {
+  bodyY: 0, bodyRot: 0, neck: 0, nx: 0, ny: 0, ear: 0, mouth: 0, lid: 0, px: 0, py: 0, happy: 0,
+  flU: 0, flL: 0, frU: 0, frL: 0, blU: -18, blL: 32, brU: -18, brL: 32,
+  t1: -10, t2: -8, t3: 6, hindVis: 1, frontVis: 1, tuck: 0,
+};
+const SP = { ...SDEF };    // what is drawn (eased)
+let ST = { ...SDEF };      // where it is heading
+const SPOSES = {
+  stand: {},
+  sit:    { bodyRot: -40, bodyY: 36, hindVis: 0, neck: 38, flU: 42, frU: 47, t1: -34, t2: -18, t3: -4 },
+  loaf:   { bodyY: 52, hindVis: 0, frontVis: 0, tuck: 1, neck: 8, t1: -40, t2: -26, t3: -10, ear: 6 },
+  crouch: { bodyY: 24, bodyRot: 6, flU: 20, flL: -12, frU: 20, frL: -12, blU: -42, blL: 64, brU: -42, brL: 64, neck: 10, t1: 0, t2: 0, t3: 0, ear: 14 },
+  leap:   { bodyRot: -20, flU: -75, flL: 20, frU: -58, frL: 26, blU: 48, blL: -8, brU: 60, brL: -14, neck: 14, t1: 26, t2: 8, t3: -5, ear: 22 },
+  land:   { bodyY: 14, bodyRot: 4, flU: 8, frU: 8, blU: -30, blL: 50, brU: -30, brL: 50, neck: 6, ear: 6 },
+  bow:    { bodyRot: 24, flU: -40, flL: 0, frU: -46, frL: 0, blU: 6, blL: 0, brU: 6, brL: 0, neck: -24, t1: 38, t2: 14, t3: 4 },
+  scratch:{ bodyRot: -62, blU: -4, blL: 8, brU: -4, brL: 8, flU: -42, frU: -54, flL: -6, frL: -6, neck: 60, t1: 8, t2: 0, t3: 0, ear: 6 },
+  hunch:  { bodyY: 16, bodyRot: 5, flU: 14, flL: 6, frU: 14, frL: 6, blU: -32, blL: 52, brU: -32, brL: 52, neck: 44, ny: 10, t1: -26, t2: -16, t3: 0, ear: 28 },
+  groomA: { bodyRot: -40, bodyY: 36, hindVis: 0, neck: 62, flU: -78, flL: 74, frU: 47, t1: -34, t2: -18, t3: -4 },
+  groomB: { bodyRot: -40, bodyY: 36, hindVis: 0, neck: 52, flU: -60, flL: 90, frU: 47, t1: -34, t2: -18, t3: -4 },
+  swat:   { bodyY: 8, bodyRot: 0, flU: -68, flL: 14, frU: 0, neck: 12, t1: 16, t2: 8, t3: 0, ear: 10 },
+  watch:  { bodyRot: -40, bodyY: 36, hindVis: 0, neck: 22, flU: 42, frU: 47, t1: -30, t2: -12, t3: 4 },
+  dizzy:  { bodyRot: -40, bodyY: 36, hindVis: 0, neck: 30, flU: 42, frU: 47, t1: -34, t2: -18, t3: -4, ear: 18 },
+};
+const pose = (name, extra) => { ST = { ...SDEF, ...SPOSES[name], ...(extra || {}) }; };
+pose('stand');
+const sEl = {};
+['sRoot','sTorso','sHead','sBL','sBLl','sBR','sBRl','sFL','sFLl','sFR','sFRl','sT1','sT2','sT3','sTuck','sEar','sEarFar',
+ 'sLid','sGaze','sPup','sMouthOpen','sTongue','sMouthShut','sEye','sArc','slBody','sz0','sz1','sz2','slZ','frontPlace','sidePlace','sleepPlace'
+].forEach(k => sEl[k] = $(k));
+const gait_off = { walk: { fl: 0, br: PI * 0.5, fr: PI, bl: PI * 1.5 }, run: { fl: 0, fr: 0.5, bl: PI, br: PI + 0.5 } };
+
+function sideRender(t, now, dt, blink) {
+  const run = gait.mode === 'run';
+  gait.amount += ((gait.mode ? 1 : 0) - gait.amount) * (1 - Math.exp(-10 * dt));
+  if (gait.mode) gait.phase += dt * (run ? 14 : 7.2);
+  const T = { ...ST };
+  T.t2 += 6 * sin(t * 1.7); T.t3 += 9 * sin(t * 1.7 - 0.8);
+  const g = gait.amount;
+  if (g > 0.01) {
+    const A = run ? 46 : 26, B = run ? 62 : 40, ph = gait.phase, o = gait_off[run ? 'run' : 'walk'];
+    const sw = (a) => Math.max(0, -cos(ph + a));
+    T.flU = lerp(T.flU, A * sin(ph + o.fl), g);  T.flL = lerp(T.flL, B * sw(o.fl), g);
+    T.frU = lerp(T.frU, A * sin(ph + o.fr), g);  T.frL = lerp(T.frL, B * sw(o.fr), g);
+    T.blU = lerp(T.blU, -18 + A * 0.8 * sin(ph + o.bl), g); T.blL = lerp(T.blL, 32 + B * 0.8 * sw(o.bl), g);
+    T.brU = lerp(T.brU, -18 + A * 0.8 * sin(ph + o.br), g); T.brL = lerp(T.brL, 32 + B * 0.8 * sw(o.br), g);
+    T.bodyY += g * (run ? -7 * Math.abs(sin(ph)) : -2.5 * Math.abs(sin(ph * 2)));
+    T.bodyRot += g * (run ? -5 * sin(ph + 1) : 0);
+    T.neck += g * (run ? 5 : 3) * sin(ph * 2);
+    T.t1 = lerp(T.t1, run ? 30 : 16, g);
+    T.hindVis = 1; T.frontVis = 1; T.tuck = 0;
+  }
+  // talking: mouth follows the speech audio, same as the front-facing rig
+  if (catState === 'talking') {
+    const fresh = now - mouthAt < 250;
+    T.mouth = fresh ? clamp(mouthIn * 1.25, 0, 1) : (now < sayUntil ? 0.35 + 0.3 * sin(t * 14) : 0);
+  }
+  const k = 1 - Math.exp(-11 * dt), kl = 1 - Math.exp(-24 * dt);
+  for (const key in SDEF) {
+    const fast = key.length === 3 && 'flU frU blU brU flL frL blL brL'.includes(key);
+    SP[key] += (T[key] - SP[key]) * (fast ? kl : k);
+  }
+
+  const rot = (a, x, y) => `rotate(${a.toFixed(2)} ${x} ${y})`;
+  const set = (id, v) => sEl[id].setAttribute('transform', v);
+  set('sRoot', `translate(0 ${SP.bodyY.toFixed(2)})`);
+  set('sTorso', rot(SP.bodyRot, -50, -66));
+  set('sBL', `translate(-50 -80) rotate(${SP.blU.toFixed(2)})`);  set('sBLl', `translate(0 40) rotate(${SP.blL.toFixed(2)})`);
+  set('sBR', `translate(-36 -80) rotate(${SP.brU.toFixed(2)})`);  set('sBRl', `translate(0 40) rotate(${SP.brL.toFixed(2)})`);
+  set('sFL', `translate(42 -80) rotate(${SP.flU.toFixed(2)})`);   set('sFLl', `translate(0 40) rotate(${SP.flL.toFixed(2)})`);
+  set('sFR', `translate(54 -80) rotate(${SP.frU.toFixed(2)})`);   set('sFRl', `translate(0 40) rotate(${SP.frL.toFixed(2)})`);
+  set('sHead', `translate(${(62 + SP.nx).toFixed(2)} ${(-104 + SP.ny).toFixed(2)}) rotate(${SP.neck.toFixed(2)})`);
+  set('sT1', `translate(-78 -100) rotate(${SP.t1.toFixed(2)})`);
+  set('sT2', `translate(-46 0) rotate(${SP.t2.toFixed(2)})`);
+  set('sT3', `translate(-42 0) rotate(${SP.t3.toFixed(2)})`);
+  set('sEar', rot(-SP.ear * 0.8, 12, -40));
+  set('sEarFar', rot(-SP.ear * 0.8, 24, -40));
+  sEl.sBL.setAttribute('opacity', SP.hindVis); sEl.sBR.setAttribute('opacity', SP.hindVis);
+  sEl.sFL.setAttribute('opacity', SP.frontVis); sEl.sFR.setAttribute('opacity', SP.frontVis);
+  sEl.sTuck.setAttribute('opacity', SP.tuck);
+  const lid = clamp(Math.max(SP.lid, blink), 0, 1);
+  sEl.sLid.setAttribute('transform', `translate(0 -13.5) scale(1 ${lid.toFixed(3)}) translate(0 13.5)`);
+  sEl.sGaze.setAttribute('transform', `translate(${(SP.px * 0.4).toFixed(2)} ${(SP.py * 0.4).toFixed(2)})`);
+  const m = clamp(SP.mouth, 0, 1), open = m > 0.06;
+  sEl.sMouthShut.setAttribute('opacity', open ? 0 : 1);
+  sEl.sMouthOpen.setAttribute('opacity', open ? 1 : 0);
+  sEl.sTongue.setAttribute('opacity', open && m > 0.25 ? 1 : 0);
+  const ry = 2 + 9 * m;
+  sEl.sMouthOpen.setAttribute('ry', ry.toFixed(2)); sEl.sMouthOpen.setAttribute('cy', (-4 + ry * 0.5).toFixed(2));
+  sEl.sTongue.setAttribute('ry', (ry * 0.4).toFixed(2)); sEl.sTongue.setAttribute('cy', (-4 + ry * 0.9).toFixed(2));
+}
+
+/* ---- curled-up sleeping cat ---- */
+function sleepRender(t) {
+  const b = 1 + 0.03 * sin(t * 1.1);
+  sEl.slBody.setAttribute('transform', `translate(0 0) scale(${(1 + 0.012 * sin(t * 1.1)).toFixed(4)} ${b.toFixed(4)})`);
+  [sEl.sz0, sEl.sz1, sEl.sz2].forEach((z, i) => {
+    const ph = (t * 0.3 + i / 3) % 1;
+    z.setAttribute('x', 70 + ph * 50 + i * 8); z.setAttribute('y', -92 - ph * 70);
+    z.setAttribute('opacity', sin(ph * PI).toFixed(2));
+  });
+}
+
+/* ---- placing the cat in the world ---- */
+function place() {
+  const sx = (v) => Math.max(v, 0.001);
+  sEl.frontPlace.setAttribute('transform', `translate(${Cat.x.toFixed(1)} ${Cat.y.toFixed(1)}) scale(${(FS * sx(vis.front)).toFixed(3)} ${FS}) translate(-200 -418)`);
+  sEl.sidePlace.setAttribute('transform', `translate(${Cat.x.toFixed(1)} ${Cat.y.toFixed(1)}) scale(${(Cat.face * SS * sx(vis.side)).toFixed(3)} ${SS})`);
+  sEl.sleepPlace.setAttribute('transform', `translate(${Cat.x.toFixed(1)} ${Cat.y.toFixed(1)}) scale(${(Cat.face * SS * sx(vis.sleep)).toFixed(3)} ${SS})`);
+  for (const k of ['front', 'side', 'sleep']) sEl[k + 'Place'].style.display = vis[k] > 0.01 ? '' : 'none';
+}
+
+/* ---- camera ---- */
+const cam = { cx: 800, cy: 450, w: 1600 };
+function updateCamera(dt) {
+  const W = scene.clientWidth || innerWidth, H = scene.clientHeight || innerHeight;
+  const aspect = W / H;
+  let want;
+  const wide = busy || Cat.mode === 'side' || ['bored', 'tired'].includes(catState) || (catState === 'sleeping' && Cat.mode !== 'sleep');
+  if (document.body.classList.contains('with-art')) want = { cx: 800, cy: 450, w: Math.max(1600, 900 * aspect) };
+  else if (wide) want = { cx: 800, cy: 450, w: Math.max(1600, 900 * aspect) };
+  else if (Cat.mode === 'sleep' || !ATTEND.has(catState)) want = { cx: Cat.x, cy: Cat.y - 130, w: 980 };
+  else want = { cx: Cat.x, cy: Cat.y - 112, w: 560 };
+  if (birdWatching) want = { cx: 770, cy: 330, w: 800 };
+  if (window.camOverride) want = window.camOverride;
+  const k = 1 - Math.exp(-2.4 * dt);
+  cam.cx = lerp(cam.cx, want.cx, k); cam.cy = lerp(cam.cy, want.cy, k); cam.w = lerp(cam.w, want.w, k);
+  const h = cam.w / aspect;
+  scene.setAttribute('viewBox', `${(cam.cx - cam.w / 2).toFixed(1)} ${(cam.cy - h / 2).toFixed(1)} ${cam.w.toFixed(1)} ${h.toFixed(1)}`);
+}
+
+/* ---- tweens and cancellation: behaviours are written as plain async code ---- */
+let epoch = 0;
+const CANCEL = Symbol('cancel');
+const tweens = new Set();
+function tween(dur, fn, ease) {
+  return new Promise((res) => tweens.add({ t: 0, dur: Math.max(dur, 0.001), fn, res, ease: ease || smooth }));
+}
+async function tw(dur, fn, ease) {
+  const e = epoch;
+  await tween(dur, fn || (() => {}), ease);
+  if (e !== epoch) throw CANCEL;
+}
+const wait = (s) => tw(s, null, linear);
+function stepTweens(dt) {
+  for (const tw_ of [...tweens]) {
+    tw_.t += dt;
+    const p = Math.min(1, tw_.t / tw_.dur);
+    tw_.fn(tw_.ease(p));
+    if (p >= 1) { tweens.delete(tw_); tw_.res(); }
+  }
+}
+function cancelAll() {
+  epoch++;
+  for (const t of tweens) t.res();
+  tweens.clear();
+  gait.mode = null;
+}
+
+/* ---- movement ---- */
+async function walkX(target, { run = false } = {}) {
+  const lim = PLACES[Cat.surface];
+  target = clamp(target, lim.minX, lim.maxX);
+  const dist = Math.abs(target - Cat.x);
+  if (dist < 3) return;
+  const x0 = Cat.x;
+  Cat.face = Math.sign(target - x0);
+  gait.mode = run ? 'run' : 'walk';
+  try { await tw(dist / (run ? 560 : 200), (p) => { Cat.x = x0 + (target - x0) * p; }, linear); }
+  finally { gait.mode = null; }
+}
+
+async function jumpTo(name, preferX) {
+  const pl = PLACES[name];
+  const x0 = Cat.x, y0 = Cat.y, y1 = pl.y;
+  const tx = clamp(preferX ?? x0, pl.minX, pl.maxX);
+  if (Math.abs(tx - x0) > 4) Cat.face = Math.sign(tx - x0);
+  pose('crouch'); await wait(0.24);
+  const rise = Math.max(0, y0 - y1), run = Math.abs(tx - x0);
+  const H = 70 + rise * 0.4 + run * 0.08;
+  const dur = clamp(0.5 + (rise + run) / 1100, 0.55, 1.0);
+  pose('leap');
+  let switched = false;
+  await tw(dur, (p) => {
+    Cat.x = lerp(x0, tx, p);
+    Cat.y = lerp(y0, y1, p) - 4 * H * p * (1 - p);
+    if (p > 0.55 && !switched) { switched = true; setSurface(name); }
+  }, linear);
+  Cat.x = tx; Cat.y = y1; setSurface(name);
+  pose('land'); await wait(0.2);
+  pose('stand'); await wait(0.12);
+}
+
+async function goFloor(x, opts) {
+  await ensureSide();
+  if (Cat.surface !== 'floor') await jumpTo('floor', Cat.x + Cat.face * 150);
+  await walkX(x, opts);
+}
+async function goTo(name, run) {
+  const x = PLACES[name] ? PLACES[name].floorX : 860;
+  await goFloor(x, { run });
+}
+async function jumpOn(name, preferX) {
+  if (!isFurniture(name)) return goTo(name, false);
+  if (Cat.surface === name) return;
+  await ensureSide();
+  const pl = PLACES[name];
+  if (Cat.surface !== 'floor' && Math.abs(Cat.x - clamp(Cat.x, pl.minX, pl.maxX)) > 430) {
+    await jumpTo('floor', Cat.x + Cat.face * 120);
+  }
+  if (Cat.surface === 'floor' && Math.abs(Cat.x - pl.floorX) > 150) await walkX(pl.floorX + rnd(-40, 40));
+  await jumpTo(name, preferX);
+}
+
+/* ---- turning between the front, side and curled-up bodies ---- */
+function normalizeVis() { for (const k of ['front', 'side', 'sleep']) vis[k] = Cat.mode === k ? 1 : 0; }
+async function setMode(m) {
+  if (Cat.mode === m) return;
+  const from = Cat.mode;
+  try {
+    await tw(0.1, (p) => { vis[from] = 1 - p; });
+    Cat.mode = m;
+    vis[from] = 0;
+    await tw(0.14, (p) => { vis[m] = p; });
+  } finally { normalizeVis(); }
+}
+async function ensureSide() {
+  if (Cat.mode === 'side') return;
+  if (Cat.mode === 'sleep') { await wakeUp(); return; }
+  pose('sit');
+  await setMode('side');
+  pose('stand'); await wait(0.2);
+}
+async function faceFront() {
+  if (Cat.mode === 'front') return;
+  if (Cat.mode === 'sleep') await wakeUp();
+  gait.mode = null;
+  pose('sit'); await wait(0.35);
+  await setMode('front');
+}
+async function wakeUp() {
+  pose('loaf'); await setMode('side');
+  pose('sit'); await wait(0.5);
+  pose('bow'); await wait(0.9);
+  ST.mouth = 0.9; await wait(0.6); ST.mouth = 0;
+  pose('stand'); await wait(0.3);
+}
+
+/* ---- the things a cat does ---- */
+const cup = { home: { x: 770, y: 700 }, out: false };
+function placeFurball(x, y) {
+  const f = $('furball');
+  f.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+  f.setAttribute('opacity', 1);
+  clearTimeout(placeFurball.t);
+  placeFurball.t = setTimeout(() => f.setAttribute('opacity', 0), 40000);
+}
+function setMug(x, y, rot) { $('mug').setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)})`); }
+function resetMug() {
+  cup.out = false;
+  $('furnBehind').appendChild($('mug'));
+  setMug(cup.home.x, cup.home.y, 0);
+}
+
+const ACTS = {
+  async walk_to(t) { await goTo(t || 'rug', false); },
+  async run_to(t) { await goTo(t || 'right', true); },
+  async jump_on(t) { await jumpOn(t || 'sofa'); },
+  async jump_down() {
+    await ensureSide();
+    if (Cat.surface !== 'floor') await jumpTo('floor', Cat.x + Cat.face * 140);
+  },
+  async sit() { await ensureSide(); pose('sit'); await wait(1.6); },
+  async loaf() { await ensureSide(); pose('loaf'); await wait(3); },
+  async stretch() {
+    await ensureSide(); pose('bow'); await wait(1.1);
+    ST.mouth = 0.9; await wait(0.9); ST.mouth = 0;
+    pose('stand'); await wait(0.4);
+  },
+  async groom() {
+    await ensureSide(); pose('sit'); await wait(0.5);
+    for (let i = 0; i < 5; i++) { pose('groomA'); await wait(0.3); pose('groomB'); await wait(0.3); }
+    pose('sit'); await wait(0.4);
+  },
+  async scratch(t) {
+    const chair = t === 'armchair';
+    await goFloor(chair ? 1224 : 640);
+    Cat.face = chair ? 1 : -1;
+    pose('scratch'); await wait(0.5);
+    const mark = $('sofaScratches');
+    for (let i = 0; i < 12; i++) {
+      await tw(0.16, (p) => {
+        const a = i % 2 ? p : 1 - p;
+        ST.flU = -42 - 18 * a; ST.frU = -54 + 20 * a;
+      });
+      if (i === 6 && !chair) mark.setAttribute('opacity', 0.8);
+    }
+    pose('stand'); await wait(0.5);
+  },
+  async furball() {
+    await ensureSide();
+    pose('hunch'); await wait(0.7);
+    for (let i = 0; i < 3; i++) {
+      await tw(0.3, (p) => {
+        const b = sin(p * PI);
+        ST.neck = 44 + 16 * b; ST.nx = 12 * b; ST.bodyY = 16 + 7 * b; ST.mouth = b; ST.lid = 0.6 * b;
+      });
+    }
+    ST.mouth = 0.8; await wait(0.3);
+    placeFurball(Cat.x + Cat.face * 82, Cat.y);
+    ST.mouth = 0; ST.lid = 0; ST.nx = 0;
+    pose('sit'); await wait(0.7);
+    for (let i = 0; i < 2; i++) { ST.neck = 52; await wait(0.25); ST.neck = 30; await wait(0.25); }
+    pose('stand'); await wait(0.3);
+    await walkX(Cat.x - Cat.face * 170);
+  },
+  async knock_cup() {
+    if (cup.out) resetMug();
+    await jumpOn('table', 720);
+    await walkX(722);
+    Cat.face = 1;
+    pose('swat'); await wait(0.5);
+    ST.t1 = 40; await wait(0.3);
+    $('props').appendChild($('mug')); cup.out = true;
+    await tw(0.18, (p) => { ST.flU = lerp(-68, -8, p); });
+    const x0 = 770, y0 = 700;
+    await tw(0.85, (p) => {
+      setMug(x0 + 110 * p, y0 + (FLOOR - 8 - y0) * p * p, 560 * p);
+    }, linear);
+    setMug(880, FLOOR - 4, 92);
+    pose('sit'); await wait(0.5);
+    pose('stand');
+    clearTimeout(knock_cup_t); knock_cup_t = setTimeout(resetMug, 25000);
+    await jumpTo('floor', 840);
+  },
+  async chase_tail() {
+    await ensureSide(); pose('sit'); await wait(0.3);
+    for (let i = 0; i < 7; i++) {
+      Cat.face *= -1;
+      pose('sit', { neck: 20 + 30 * (i % 2), t1: 30, t2: 40 * (i % 2 ? 1 : -1), t3: 30, mouth: 0.4 });
+      await wait(0.2);
+    }
+    pose('dizzy'); await wait(1.4);
+    pose('stand');
+  },
+  async zoomies() {
+    await ensureSide(); pose('stand');
+    for (let i = 0; i < 4; i++) {
+      await goFloor(rnd(120, 1480), { run: true });
+      if (Math.random() < 0.45) {
+        await jumpOn(pick(['sofa', 'armchair']));
+        await jumpTo('floor', Cat.x + pick([-1, 1]) * rnd(150, 300));
+      }
+    }
+    pose('sit', { mouth: 0.4 }); await wait(1.8); pose('stand');
+  },
+  async watch_tv() {
+    await goFloor(760);
+    Cat.face = 1;
+    pose('watch'); await wait(0.5);
+    tvFlicker = performance.now() + 7000;
+    await wait(7);
+    pose('stand');
+  },
+};
+let knock_cup_t = 0, tvFlicker = 0;
+
+/* ---- what she does when nobody is telling her ---- */
+const ATTEND = new Set(['listening', 'thinking', 'talking', 'waiting']);
+let busy = null;              // { commanded, state }
+const queue = [];
+let sleepPlace = 'sofa';
+
+async function sleepRoutine() {
+  busy = { commanded: false, state: 'sleeping' };
+  if (Cat.mode !== 'sleep') {
+    await ensureSide();
+    if (sleepPlace === 'rug') await goFloor(860);
+    else if (isFurniture(sleepPlace)) await jumpOn(sleepPlace, PLACES[sleepPlace].floorX);
+    else await goFloor(PLACES[sleepPlace]?.floorX ?? 860);
+    pose('loaf'); await wait(0.8);
+    await setMode('sleep');
+  }
+  while (catState === 'sleeping') await wait(0.5);
+}
+async function tiredRoutine() {
+  busy = { commanded: false, state: 'tired' };
+  await ensureSide();
+  await jumpOn('sofa');
+  pose('sit'); await wait(0.8);
+  while (catState === 'tired') {
+    ST.lid = 0.55; ST.neck = 30; await wait(2.2);
+    await tw(1.6, (p) => { ST.mouth = sin(p * PI); ST.neck = 30 + 22 * sin(p * PI); ST.lid = 0.55 + 0.35 * sin(p * PI); });
+    ST.mouth = 0; await wait(rnd(2, 4));
+  }
+}
+const MISCHIEF = [['zoomies', 3], ['scratch', 2], ['knock_cup', 1.5], ['chase_tail', 2], ['furball', 0.8], ['groom', 1], ['stretch', 1], ['jump_on', 1.5], ['watch_tv', 0.6]];
+async function mischief() {
+  busy = { commanded: false, state: 'bored' };
+  let r = Math.random() * MISCHIEF.reduce((s, m) => s + m[1], 0), name = MISCHIEF[0][0];
+  for (const [n, w] of MISCHIEF) { if ((r -= w) <= 0) { name = n; break; } }
+  const target = name === 'jump_on' ? pick(['sofa', 'armchair', 'table', 'tv', 'window']) : name === 'scratch' ? pick(['sofa', 'armchair']) : undefined;
+  await ensureSide();
+  await ACTS[name](target);
+  await wait(rnd(0.6, 2.2));
+}
+
+async function decide() {
+  if (window.freeze) { await new Promise((r) => setTimeout(r, 100)); return; }
+  normalizeVis();
+  if (queue.length) {
+    const job = queue.shift();
+    busy = { commanded: true };
+    try { await job(); } finally { busy = null; }
+    return;
+  }
+  const st = catState;
+  try {
+    if (['idle', 'bored', 'tired'].includes(st) && birdsPerched().length && performance.now() > birdCooldown) await chatterAtBirds();
+    else if (st === 'sleeping') await sleepRoutine();
+    else if (st === 'tired') await tiredRoutine();
+    else if (st === 'bored') await mischief();
+    else { await faceFront(); await wait(0.25); }
+  } finally { busy = null; }
+}
+(async function life() {
+  for (;;) {
+    try { await decide(); } catch (x) { if (x !== CANCEL) console.error(x); }
+    await new Promise((r) => setTimeout(r, 30));
+  }
+})();
+
+function onAct(actions) {
+  if (busy && !busy.commanded) cancelAll();
+  for (const a of actions) {
+    if (!ACTS[a.do]) continue;
+    queue.push(() => ACTS[a.do](a.target));
+  }
+}
+
+/* =========================================================
+   The window: your real time of day, a tree, and the odd bird
+   ========================================================= */
+const NS = 'http://www.w3.org/2000/svg';
+const SKY = [
+  [0, '#070d24', '#131f4a'], [5, '#0f1a44', '#2a3a7a'], [6, '#3a4a8a', '#f0a070'], [7, '#5a8fd0', '#f8c890'],
+  [9, '#5aa8f0', '#bfe2ff'], [12, '#4a9cf2', '#cfeaff'], [16, '#5aa0e8', '#d8ecff'], [18, '#4a5aa0', '#f5a45a'],
+  [19, '#2c3a78', '#e8805a'], [20, '#141f50', '#3a3068'], [21.5, '#0a1230', '#18255a'], [24, '#070d24', '#131f4a'],
+];
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const rgbHex = (c) => '#' + c.map((v) => Math.round(clamp(v, 0, 255)).toString(16).padStart(2, '0')).join('');
+const mixHex = (a, b, t) => { const A = hexRgb(a), B = hexRgb(b); return rgbHex(A.map((v, i) => lerp(v, B[i], t))); };
+function skyAt(h) {
+  for (let i = 0; i < SKY.length - 1; i++) {
+    const [h0, t0, b0] = SKY[i], [h1, t1, b1] = SKY[i + 1];
+    if (h >= h0 && h <= h1) { const f = (h - h0) / (h1 - h0); return [mixHex(t0, t1, f), mixHex(b0, b1, f)]; }
+  }
+  return [SKY[0][1], SKY[0][2]];
+}
+let hourOverride = null;
+const hourNow = () => {
+  if (hourOverride != null) return hourOverride;
+  const d = new Date();
+  return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+};
+const daylightAt = (h) => (h < 5.5 || h >= 20.5 ? 0 : h < 7.5 ? (h - 5.5) / 2 : h < 17 ? 1 : 1 - (h - 17) / 3.5);
+let daylight = 1;
+
+function updateSky() {
+  const h = hourNow(), [top, bot] = skyAt(h), d = clamp(daylightAt(h), 0, 1), n = 1 - d;
+  daylight = d;
+  $('skyTop').setAttribute('stop-color', top); $('skyBot').setAttribute('stop-color', bot);
+  $('stars').setAttribute('opacity', clamp(n * 1.4 - 0.25, 0, 1).toFixed(2));
+  // sun: rises on the left at 06:00, sets on the right at 18:00
+  const st = clamp((h - 6) / 12, 0, 1), low = 1 - Math.sin(Math.PI * st), sunUp = h > 5.7 && h < 19.3;
+  $('sunG').setAttribute('opacity', sunUp ? clamp(Math.min(h - 5.7, 19.3 - h) * 2, 0, 1).toFixed(2) : 0);
+  $('sunG').setAttribute('transform', `translate(${(630 + 230 * st).toFixed(1)} ${(412 - 262 * Math.sin(Math.PI * st)).toFixed(1)})`);
+  $('sun').setAttribute('fill', mixHex('#fff3c0', '#ff8f3a', low * low));
+  $('sunGlow').setAttribute('fill', mixHex('#ffe9a8', '#ff7a2a', low * low));
+  // moon: up from about 18:30 to 05:30, crossing right to left
+  const mt = clamp(((h - 18.3 + 24) % 24) / 11.4, 0, 1), moonUp = h >= 18.3 || h < 5.7;
+  $('moonG').setAttribute('opacity', moonUp ? clamp(n * 2, 0, 1).toFixed(2) : 0);
+  $('moonG').setAttribute('transform', `translate(${(860 - 230 * mt).toFixed(1)} ${(405 - 250 * Math.sin(Math.PI * mt)).toFixed(1)})`);
+  // the land, the tree and the clouds follow the light
+  $('hills').setAttribute('fill', mixHex('#10202a', '#4f9a5a', d));
+  $('limbs').setAttribute('stroke', mixHex('#1e150e', '#6b4a2e', d));
+  $('leaves').setAttribute('fill', mixHex('#0f2b2b', '#3f9b4f', d));
+  $('leavesHi').setAttribute('fill', mixHex('#143a38', '#56b565', d));
+  $('clouds').setAttribute('fill', mixHex('#7d88b8', '#ffffff', clamp(d * 1.2, 0, 1)));
+  $('clouds').setAttribute('opacity', (0.12 + 0.8 * d).toFixed(2));
+  // the room: dark and lamplit at night, warm at dawn and dusk
+  const warm = d > 0.03 && d < 0.97 ? Math.max(0, 1 - Math.abs(d - 0.5) * 2.2) : 0;
+  $('ambNight').setAttribute('opacity', (0.34 * n).toFixed(3));
+  $('ambWarm').setAttribute('opacity', (0.13 * warm).toFixed(3));
+  $('lampGlow').setAttribute('opacity', (0.25 + 0.75 * n).toFixed(2));
+}
+updateSky();
+setInterval(updateSky, 20000);
+
+/* ---- birds: a sparrow, a blue tit or a robin drops in now and then ---- */
+const BIRD_KINDS = [
+  { body: '#8b5e3c', belly: '#e6cfa8', wing: '#6a4426', head: '#7a5232', beak: '#e8a43a' },   // sparrow
+  { body: '#6aa0d8', belly: '#f5d95a', wing: '#3f6fb0', head: '#2f4f8a', beak: '#333333' },   // blue tit
+  { body: '#8a6a4a', belly: '#ee7a3a', wing: '#6a4a30', head: '#8a6a4a', beak: '#333333' },   // robin
+];
+const PERCHES = [{ x: 812, y: 304 }, { x: 781, y: 293 }, { x: 735, y: 276 }];
+const birds = [];
+const birdLayer = $('birds');
+let nextBirdAt = 12;          // seconds on the page clock
+let birdWatching = false, birdCooldown = 0;
+
+function birdMarkup(c) {
+  return `<path d="M-8 -12 L-25 -6 L-24 -14Z" fill="${c.wing}"/>
+    <ellipse cx="0" cy="-13" rx="11" ry="8" fill="${c.body}"/><ellipse cx="2" cy="-10" rx="7" ry="5" fill="${c.belly}"/>
+    <circle cx="9" cy="-19" r="5.8" fill="${c.head}"/><path d="M13.5 -19.8 L19.5 -18.4 L13.5 -17Z" fill="${c.beak}"/>
+    <circle cx="11" cy="-20.5" r="1.2" fill="#111"/>
+    <g class="bw"><ellipse cx="-2" cy="-14" rx="8" ry="4.6" fill="${c.wing}"/></g>
+    <path class="legs" d="M-2 -6 V0 M3 -6 V0" stroke="#5a4030" stroke-width="1.4"/>`;
+}
+function makeBird() {
+  const free = PERCHES.filter((p) => !birds.some((b) => b.perch === p));
+  if (!free.length) return;
+  const g = document.createElementNS(NS, 'g');
+  g.innerHTML = birdMarkup(pick(BIRD_KINDS));
+  birdLayer.appendChild(g);
+  const fromLeft = Math.random() < 0.5;
+  birds.push({
+    g, wing: g.querySelector('.bw'), legs: g.querySelector('.legs'), perch: pick(free), state: 'in', t: 0,
+    dur: rnd(1.3, 1.9), stay: rnd(8, 15), x0: fromLeft ? 590 : 900, y0: rnd(140, 210), face: 1, turn: rnd(1, 3), seed: Math.random() * 6,
+  });
+}
+function spawnBirds() {
+  makeBird();
+  if (Math.random() < 0.4) setTimeout(makeBird, 900);
+}
+const birdsPerched = () => birds.filter((b) => b.state === 'perch');
+
+function onBirdPerched() {
+  // a bored or tired cat drops what she's doing to go and look; a busy or sleepy one doesn't notice
+  if (busy && !busy.commanded && ['bored', 'tired'].includes(busy.state)) cancelAll();
+}
+
+function birdsStep(t, dt) {
+  if (!document.hidden && daylight > 0.3 && !birds.length && t > nextBirdAt) spawnBirds();
+  for (const b of [...birds]) {
+    b.t += dt;
+    let x, y, flap = false, tilt = 0, face = b.face;
+    if (b.state === 'in') {
+      const p = clamp(b.t / b.dur, 0, 1), e = smooth(p);
+      x = lerp(b.x0, b.perch.x, e); y = lerp(b.y0, b.perch.y, e) - 26 * sin(p * PI) * (1 - p);
+      flap = true; face = Math.sign(b.perch.x - b.x0) || 1; b.face = face;
+      if (p >= 1) { b.state = 'perch'; b.t = 0; onBirdPerched(b); }
+    } else if (b.state === 'perch') {
+      x = b.perch.x; y = b.perch.y;
+      b.turn -= dt;
+      if (b.turn <= 0) { b.face = -b.face; b.turn = rnd(1.2, 3.5); }
+      face = b.face; tilt = 3 * sin(t * 5 + b.seed);
+      if (sin(t * 2.6 + b.seed) > 0.985) y -= 3;                 // a little hop
+      if (b.t > b.stay) { b.state = 'out'; b.t = 0; b.x1 = x; b.y1 = y; b.tx = b.x1 > 750 ? 600 : 900; }
+    } else {
+      const p = clamp(b.t / 1.7, 0, 1);
+      x = lerp(b.x1, b.tx, p * p); y = b.y1 - 130 * p - 14 * sin(p * PI); flap = true;
+      face = Math.sign(b.tx - b.x1) || 1; b.face = face;
+      if (p >= 1) { b.g.remove(); birds.splice(birds.indexOf(b), 1); if (!birds.length) nextBirdAt = t + rnd(35, 90); continue; }
+    }
+    b.g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${face} 1) rotate(${tilt.toFixed(1)})`);
+    b.wing.setAttribute('transform', `rotate(${flap ? (-58 * Math.abs(sin(t * 34 + b.seed))).toFixed(1) : 0} -2 -14)`);
+    b.legs.setAttribute('opacity', flap ? 0 : 1);
+  }
+}
+
+/* Cats chatter at birds: she hops on the windowsill, stares and makes the 'ek-ek-ek' noise. */
+async function chatterAtBirds() {
+  busy = { commanded: false, state: catState };
+  birdWatching = true;
+  try {
+    await ensureSide();
+    await jumpOn('window', 690);
+    Cat.face = 1;
+    pose('sit', { neck: 24, px: 10, py: -8 });
+    await wait(0.6);
+    for (let burst = 0; burst < 4 && birdsPerched().length; burst++) {
+      send({ type: 'sfx', kind: 'chatter' });
+      await tw(1.3, (p) => {
+        ST.mouth = 0.12 + 0.2 * Math.abs(sin(p * 70)); ST.t3 = -4 + 14 * sin(p * 40);
+        ST.neck = 24 + 2 * sin(p * 50); ST.ear = 6 * Math.abs(sin(p * 20));
+      }, linear);
+      ST.mouth = 0; ST.ear = 0;
+      const b = birdsPerched()[0];
+      if (b) ST.py = clamp((b.perch.y - 285) / 5, -10, 4);
+      await wait(rnd(0.7, 1.5));
+    }
+    ST.px = 12; ST.py = -10; await wait(1.5);   // watch it fly away
+    pose('sit'); await wait(1.2);
+  } finally {
+    birdWatching = false;
+    birdCooldown = performance.now() + 25000;
+  }
+}
+
+function skyStep(t) {
+  const x1 = ((t * 4) % 380) + 570, x2 = ((t * 2.6 + 190) % 380) + 570;
+  $('cloud1').setAttribute('transform', `translate(${x1.toFixed(1)} 186)`);
+  $('cloud2').setAttribute('transform', `translate(${x2.toFixed(1)} 238)`);
+}
+
+/* =========================================================
+   Frame loop
+   ========================================================= */
+let last = performance.now();
+function frame(ms) {
+  try {
+    const dt = Math.min(0.05, (ms - last) / 1000); last = ms;
+    const t = ms / 1000;
+    stepTweens(dt);
+    frontRender(t, ms, dt);
+    // blink shared by the side rig
+    let blink = 0;
+    if (blinkT >= 0) blink = sin(clamp((t - blinkT) / 0.16, 0, 1) * PI);
+    sideRender(t, ms, dt, blink);
+    if (Cat.mode === 'sleep' || vis.sleep > 0.01) sleepRender(t);
+    skyStep(t); birdsStep(t, dt);
+    place();
+    updateCamera(dt);
+    // TV: flickers while she watches, otherwise glows softly when there's an artefact on it
+    const g = $('tvGlow');
+    if (ms < tvFlicker) { g.setAttribute('opacity', (0.25 + 0.2 * sin(t * 9) * sin(t * 3.1)).toFixed(2)); g.setAttribute('fill', ['#7ee0a1', '#8fb8ff', '#ffb86b'][Math.floor(t * 2.2) % 3]); }
+    else g.setAttribute('opacity', lastArt ? 0.12 : 0);
+  } catch (e) {
+    console.error('frame error', e);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* =========================================================
+   UI wiring
+   ========================================================= */
+const LABELS = { idle: 'ready', listening: 'listening…', thinking: 'thinking…', talking: 'talking', sleeping: 'zzz…', bored: 'bored!', tired: 'sleepy…', waiting: 'waiting…' };
+let awake = false, muted = false, current = null, captionTimer = 0, heardTimer = 0, working = false;
+
+function setState(s) {
+  const prev = catState;
+  catState = s;
+  refreshLabel();
+  if (prev !== s) onState(prev, s);
+}
+/* An autonomous routine (wandering, napping) ends as soon as the state it belongs to ends. */
+function onState(prev, next) {
+  if (prev === 'sleeping') sleepPlace = 'sofa';
+  if (busy && !busy.commanded && busy.state && busy.state !== next) cancelAll();
+}
+let lastArt = null;
+function refreshLabel() {
+  $('stateline').textContent = !awake ? 'waking up…' : muted ? 'muted' : (LABELS[catState] || catState);
+}
+function setMuted(m) {
+  muted = m;
+  document.body.classList.toggle('muted', m);
+  $('mute').setAttribute('aria-pressed', String(m));
+  $('mute-label').textContent = m ? 'Muted' : 'Listening';
+  $('mute').title = m ? 'Unmute microphone and camera (M)' : 'Mute microphone and camera (M)';
+  setState(catState);
+  if (m) { $('ring').style.opacity = 0; }
+}
+function toast(text) {
+  const t = $('toast'); t.textContent = text; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3500);
+}
+function showCaption(text) {
+  const c = $('caption'); c.textContent = text; c.classList.add('show');
+  clearTimeout(captionTimer);
+  captionTimer = setTimeout(() => c.classList.remove('show'), 3500 + text.length * 60);
+  sayUntil = performance.now() + Math.max(1200, text.length * 62);
+}
+function showHeard(text) {
+  const h = $('heard'); h.textContent = '“' + text + '”'; h.classList.add('show');
+  clearTimeout(heardTimer); heardTimer = setTimeout(() => h.classList.remove('show'), 5000);
+}
+function startEmote(name, secs) {
+  const now = performance.now();
+  emote = { name, start: now, until: now + secs * 1000 };
+}
+
+/* ---- artefact viewport ---- */
+const PRELUDE = `<script>window.purrnel={_r:0,_p:{},get(k){return new Promise(res=>{const r=++this._r;this._p[r]=res;parent.postMessage({purrnel:1,op:'get',key:k,req:r},'*')})},set(k,v){parent.postMessage({purrnel:1,op:'set',key:k,value:v},'*');return Promise.resolve()}};addEventListener('message',e=>{const d=e.data;if(d&&d.purrnelReply){const f=window.purrnel._p[d.req];if(f){delete window.purrnel._p[d.req];f(d.value)}}});<\/script>`;
+function withPrelude(html) {
+  const head = /<head[^>]*>/i, htmlTag = /<html[^>]*>/i;
+  if (head.test(html)) return html.replace(head, (m) => m + PRELUDE);
+  if (htmlTag.test(html)) return html.replace(htmlTag, (m) => m + '<head>' + PRELUDE + '</head>');
+  return '<!doctype html><html><head><meta charset="utf-8">' + PRELUDE + '</head><body>' + html + '</body></html>';
+}
+function showArtefact(a) {
+  current = a.id;
+  working = false;
+  $('vp-title').textContent = a.title;
+  $('vp-ver').textContent = a.version > 1 ? `version ${a.version}` : '';
+  $('frame').srcdoc = withPrelude(a.html);
+  document.body.classList.add('with-art');
+  if (emote && emote.name === 'working') emote = null;
+  lastArt = { id: a.id, title: a.title };
+  $('tvTitle').textContent = a.title.length > 22 ? a.title.slice(0, 21) + '…' : a.title;
+  $('tvTitle').setAttribute('opacity', 1); $('tvPlay').setAttribute('opacity', 0.7);
+}
+function closeArtefact() {
+  current = null;
+  document.body.classList.remove('with-art');
+  $('frame').srcdoc = '';
+}
+addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || !d.purrnel || e.source !== $('frame').contentWindow || !current) return;
+  if (d.op === 'get') send({ type: 'data_get', id: current, req: d.req, key: String(d.key) });
+  else if (d.op === 'set') send({ type: 'data_set', id: current, key: String(d.key), value: d.value });
+});
+
+function renderDrawer(items) {
+  $('art-count').textContent = items.length;
+  const list = $('drawer-list'); list.textContent = '';
+  if (!items.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'Nothing yet. Ask me to make something!'; list.append(d); return; }
+  for (const it of items) {
+    const b = document.createElement('button');
+    const t = document.createElement('div'); t.textContent = it.title;
+    const m = document.createElement('div'); m.className = 'meta';
+    m.textContent = `${it.versions} version${it.versions === 1 ? '' : 's'} · ${new Date(it.updated * 1000).toLocaleString()}`;
+    b.append(t, m);
+    b.onclick = () => { send({ type: 'show', id: it.id }); toggleDrawer(false); };
+    list.append(b);
+  }
+}
+function toggleDrawer(open) {
+  const d = $('drawer'); const o = open ?? !d.classList.contains('open');
+  d.classList.toggle('open', o); $('artefacts-btn').setAttribute('aria-expanded', String(o));
+}
+
+/* ---- websocket ---- */
+let ws;
+const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => document.body.classList.remove('disconnected');
+  ws.onclose = () => { document.body.classList.add('disconnected'); setTimeout(connect, 1500); };
+  ws.onmessage = (e) => handle(JSON.parse(e.data));
+}
+function handle(m) {
+  switch (m.type) {
+    case 'cat': setState(m.state); break;
+    case 'privacy': setMuted(m.muted); break;
+    case 'online': document.body.classList.toggle('offline', !m.online); break;
+    case 'heard': showHeard(m.text); break;
+    case 'say': showCaption(m.text); break;
+    case 'mouth': mouthIn = m.level; mouthAt = performance.now(); break;
+    case 'level': {
+      mic = m.level;
+      const r = $('ring'); r.style.opacity = muted ? 0 : (0.15 + mic * 0.6).toFixed(2); r.style.transform = `scale(${(1 + mic * 0.8).toFixed(2)})`;
+      break;
+    }
+    case 'artefact': showArtefact(m); break;
+    case 'artefacts': renderDrawer(m.items); break;
+    case 'close': closeArtefact(); break;
+    case 'ready':
+      awake = true; refreshLabel();
+      if (!m.voice) toast('No voice available: I can only show subtitles.');
+      else if (!m.ears) toast('No speech recognition: please type to me.');
+      break;
+    case 'confirm': $('confirm-text').textContent = m.prompt; $('confirm').classList.add('open'); $('confirm-yes').focus(); break;
+    case 'confirm_done': $('confirm').classList.remove('open'); break;
+    case 'emote':
+      startEmote(m.name, m.name === 'working' ? 20 : (m.name === 'yawn' || m.name === 'sleepy' ? 2.6 : 4));
+      if (Cat.mode !== 'front' && !busy && !queue.length) queue.push(() => faceFront());
+      break;
+    case 'act': onAct(m.actions); break;
+    case 'sleep': sleepPlace = m.place; break;
+    case 'looking': {
+      lookUntil = performance.now() + 1400;
+      const f = $('flash'); f.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove('on')));
+      break;
+    }
+    case 'notice': toast(m.text); break;
+    case 'data_reply': {
+      if (m.id === current) $('frame').contentWindow?.postMessage({ purrnelReply: 1, req: m.req, value: m.value }, '*');
+      break;
+    }
+  }
+}
+
+/* ---- controls ---- */
+$('mute').onclick = () => send({ type: 'toggle_mute' });
+$('vp-close').onclick = () => send({ type: 'close' });
+$('artefacts-btn').onclick = () => toggleDrawer();
+$('confirm-yes').onclick = () => send({ type: 'confirm_answer', yes: true });
+$('confirm-no').onclick = () => send({ type: 'confirm_answer', yes: false });
+$('typebar').onsubmit = (e) => {
+  e.preventDefault();
+  const i = $('type'); const text = i.value.trim();
+  if (text) send({ type: 'text', text });
+  i.value = '';
+};
+addEventListener('keydown', (e) => {
+  const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
+  if (e.key === 'Escape') { toggleDrawer(false); $('type').blur(); return; }
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === '/') { e.preventDefault(); $('type').focus(); }
+  else if (e.key.toLowerCase() === 'm') send({ type: 'toggle_mute' });
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#drawer') && !e.target.closest('#artefacts-btn')) toggleDrawer(false);
+});
+
+const pet = () => send({ type: 'pet' });
+catWorld.addEventListener('click', pet);
+$('pip').addEventListener('click', pet);
+$('tvlabel').addEventListener('click', () => { if (lastArt) send({ type: 'show', id: lastArt.id }); });
+
+/* Debug handle for poking the room from the console, e.g. room.act('scratch') */
+window.room = { Cat, ACTS, queue, pose, onAct, spawnBirds, birds, setHour: (h) => { hourOverride = h; updateSky(); }, setSleep: (p) => { sleepPlace = p; }, get state() { return catState; }, setState };
+setMuted(false);
+connect();
+
+</script>
+</body>
+</html>
