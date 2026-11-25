@@ -14,7 +14,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 pub enum Speak {
     Text(String),
     Sfx(&'static str),
-    /// A background noise (chattering at birds, hissing at dogs): doesn't make her "talk", but she mustn't hear it.
+    /// A background noise (chattering at birds, hissing at dogs, a dog's yelp): doesn't make her "talk", but she mustn't hear it.
     Ambient(&'static str),
 }
 
@@ -32,6 +32,8 @@ pub struct Hub {
     pub pending_speech: AtomicUsize,
     /// Ambient sounds currently queued or playing.
     pub ambient: AtomicUsize,
+    /// A silent stream is holding the sound card open, so it can't be asleep.
+    keepalive: AtomicBool,
     last_activity: Mutex<Instant>,
     last_spoke_end: Mutex<Instant>,
     last_audio: Mutex<Instant>,
@@ -46,10 +48,17 @@ pub struct Hub {
     ready: Mutex<Option<(bool, bool)>>,
     /// The latest real-world weather, replayed to every UI that connects.
     weather: Mutex<Option<crate::weather::Weather>>,
+    /// The API key and weather place can change while running (the settings dialog).
+    api_key: Mutex<Option<String>>,
+    location: Mutex<Option<String>>,
+    /// Pokes the weather task to look again straight away.
+    pub weather_kick: tokio::sync::Notify,
+    pub last_feedback: Mutex<Option<Instant>>,
 }
 
 impl Hub {
     pub fn new(cfg: Config, utter_tx: mpsc::Sender<String>) -> std::io::Result<Self> {
+        let (api_key, location) = (cfg.api_key.clone(), cfg.location.clone());
         let store = Store::open(cfg.data_dir.join("artefacts"))
             .map_err(|e| std::io::Error::other(e.to_string()))?;
         let (tx, _) = broadcast::channel(512);
@@ -65,6 +74,7 @@ impl Hub {
             asleep: AtomicBool::new(false),
             pending_speech: AtomicUsize::new(0),
             ambient: AtomicUsize::new(0),
+            keepalive: AtomicBool::new(false),
             last_activity: Mutex::new(Instant::now()),
             last_spoke_end: Mutex::new(Instant::now() - Duration::from_secs(60)),
             last_audio: Mutex::new(Instant::now() - Duration::from_secs(60)),
@@ -77,6 +87,10 @@ impl Hub {
             wake_tx: OnceLock::new(),
             ready: Mutex::new(None),
             weather: Mutex::new(None),
+            api_key: Mutex::new(api_key),
+            location: Mutex::new(location),
+            weather_kick: tokio::sync::Notify::new(),
+            last_feedback: Mutex::new(None),
         })
     }
 
@@ -160,7 +174,28 @@ impl Hub {
 
     /// True if the sound card has probably gone back to sleep.
     pub fn audio_cold(&self) -> bool {
-        self.last_audio.lock().unwrap().elapsed() > Duration::from_millis(3500)
+        !self.keepalive.load(Ordering::Relaxed) && self.last_audio.lock().unwrap().elapsed() > Duration::from_millis(3500)
+    }
+
+    pub fn api_key(&self) -> Option<String> {
+        self.api_key.lock().unwrap().clone()
+    }
+
+    pub fn set_api_key(&self, key: String) {
+        *self.api_key.lock().unwrap() = Some(key);
+    }
+
+    pub fn location(&self) -> Option<String> {
+        self.location.lock().unwrap().clone()
+    }
+
+    pub fn set_location(&self, place: String) {
+        *self.location.lock().unwrap() = Some(place);
+        self.weather_kick.notify_one();
+    }
+
+    pub fn set_keepalive(&self, on: bool) {
+        self.keepalive.store(on, Ordering::Relaxed);
     }
 
     /// Registers the task that wakes the audio device (see `wake_sound_device`).
@@ -228,6 +263,7 @@ impl Hub {
         let kind: &'static str = match kind {
             "chatter" => "chatter",
             "hiss" => "hiss",
+            "yelp" => "yelp",
             "mew" => "mew",
             "mrrp" => "mrrp",
             "meow" => "meow",

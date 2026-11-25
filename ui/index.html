@@ -122,6 +122,26 @@
   #confirm .btn { min-width: 120px; justify-content: center; min-height: 52px; font-weight: 700; }
   #confirm .yes { background: rgba(255,107,122,.2); border-color: #ff6b7a99; }
   #confirm small { display: block; margin-top: 14px; color: var(--ink-dim); }
+  /* ---- settings + feedback dialogs ---- */
+  .modal { position: fixed; inset: 0; display: none; place-items: center; background: rgba(8, 6, 14, .72); z-index: 30; backdrop-filter: blur(4px); }
+  .modal.open { display: grid; }
+  .modal .box { background: #211a33; border: 1px solid var(--panel-line); border-radius: 22px; padding: 26px 28px; width: min(500px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+  .modal h2 { margin: 0 0 6px; font-size: 22px; }
+  .modal p { margin: 0 0 14px; color: var(--ink-dim); line-height: 1.45; }
+  .modal label { display: block; margin: 14px 0 0; font-weight: 600; font-size: 15px; }
+  .modal label[hidden] { display: none; }
+  .modal input, .modal select, .modal textarea {
+    display: block; width: 100%; margin-top: 7px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--panel-line);
+    background: rgba(255,255,255,.08); color: var(--ink); font: inherit; font-weight: 400; font-size: 16px;
+  }
+  .modal select option { color: #111; }
+  .modal textarea { resize: vertical; min-height: 110px; }
+  .modal small { display: block; margin-top: 6px; color: var(--ink-dim); font-weight: 400; font-size: 13px; line-height: 1.4; }
+  .modal .err { min-height: 20px; margin-top: 12px; color: var(--danger); font-size: 14px; }
+  .modal .row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 14px; }
+  .modal .btn { min-width: 110px; justify-content: center; min-height: 46px; font-weight: 700; }
+  .modal .btn.yes { background: rgba(126,224,161,.2); border-color: #7ee0a199; color: var(--ink); }
+  .modal .btn[disabled] { opacity: .5; cursor: progress; }
   #toast {
     position: fixed; left: 50%; top: 20px; transform: translate(-50%, -80px); background: #2a2140; border: 1px solid var(--panel-line);
     border-radius: 999px; padding: 10px 18px; z-index: 30; transition: transform .3s; font-size: 14px;
@@ -589,6 +609,12 @@
 </div>
 
 <div id="topright">
+  <button class="btn" id="feedback-btn" title="Send feedback to the developers" aria-label="Send feedback">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  </button>
+  <button class="btn" id="settings-btn" title="Settings: API key and location" aria-label="Settings">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+  </button>
   <button class="btn" id="artefacts-btn" aria-expanded="false" aria-controls="drawer">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
     <span id="art-count">0</span>
@@ -620,6 +646,48 @@
     <small>You can also just say yes or no.</small>
   </div>
 </div>
+<div id="setup" class="modal" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+  <form class="box" id="setup-form" autocomplete="off">
+    <h2 id="setup-title">Settings</h2>
+    <p id="setup-intro"></p>
+    <label id="key-row">My brain: your Anthropic API key
+      <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+      <small>Get one at console.anthropic.com. It is kept on this computer only and is sent nowhere except to Anthropic.</small>
+    </label>
+    <label id="loc-row">Where are you? (for the weather in my window)
+      <input id="loc" type="text" autocomplete="off" placeholder="Town, Country">
+      <small>Only this place name is looked up, on open-meteo.com, to get the weather. Nothing else about you is sent.</small>
+    </label>
+    <div class="err" id="setup-err" role="alert"></div>
+    <div class="row">
+      <button class="btn" id="setup-cancel" type="button">Not now</button>
+      <button class="btn yes" id="setup-save" type="submit">Save</button>
+    </div>
+  </form>
+</div>
+
+<div id="feedback" class="modal" role="dialog" aria-modal="true" aria-labelledby="fb-title-h">
+  <form class="box" id="fb-form" autocomplete="off">
+    <h2 id="fb-title-h">Tell the developers</h2>
+    <p>Found a bug, or got an idea? It becomes an issue on the project's GitHub page.</p>
+    <label>What is it?
+      <select id="fb-kind"><option value="bug">Something is broken</option><option value="idea">An idea or request</option><option value="other">Something else</option></select>
+    </label>
+    <label>Short title
+      <input id="fb-title" type="text" maxlength="120" placeholder="e.g. The dog is too big">
+    </label>
+    <label>Details
+      <textarea id="fb-details" maxlength="4000" placeholder="What happened, or what would you like?"></textarea>
+    </label>
+    <small id="fb-note"></small>
+    <div class="err" id="fb-err" role="alert"></div>
+    <div class="row">
+      <button class="btn" id="fb-cancel" type="button">Cancel</button>
+      <button class="btn yes" id="fb-send" type="submit">Send to GitHub</button>
+    </div>
+  </form>
+</div>
+
 <div id="toast" role="status"></div>
 <div id="flash"></div>
 
@@ -1679,7 +1747,7 @@ async function hissAtDog() {
       ST.mouth = 0.85 + 0.15 * Math.abs(sin(p * 55));
       ST.nx = 10 * sin(Math.min(1, p * 1.6) * PI); ST.neck = 16 + 3 * sin(p * 40);
       Cat.x = clamp(x0 + Cat.face * 22 * smooth(Math.min(1, p * 2)), pl.minX, pl.maxX);
-      if (p > 0.4 && d.state === 'halt') { d.state = 'flee'; d.t = 0; }                         // the dog bolts
+      if (p > 0.4 && d.state === 'halt') { d.state = 'flee'; d.t = 0; send({ type: 'sfx', kind: 'yelp' }); }   // the dog yelps and bolts
     }, linear);
     ST.mouth = 0; ST.nx = 0;
     await wait(1.0);                                                                            // glares after it
@@ -1916,6 +1984,11 @@ function handle(m) {
       break;
     }
     case 'notice': toast(m.text); break;
+    case 'settings': showSettings(m); break;
+    case 'settings_result': settingsResult(m); break;
+    case 'info': info = m; feedbackNote(); break;
+    case 'feedback_result': feedbackResult(m); break;
+    case 'feedback_draft': openFeedback(m); break;
     case 'data_reply': {
       if (m.id === current) $('frame').contentWindow?.postMessage({ purrnelReply: 1, req: m.req, value: m.value }, '*');
       break;
@@ -1937,7 +2010,7 @@ $('typebar').onsubmit = (e) => {
 };
 addEventListener('keydown', (e) => {
   const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
-  if (e.key === 'Escape') { toggleDrawer(false); $('type').blur(); return; }
+  if (e.key === 'Escape') { toggleDrawer(false); $('type').blur(); closeModal('setup'); closeModal('feedback'); return; }
   if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === '/') { e.preventDefault(); $('type').focus(); }
   else if (e.key.toLowerCase() === 'm') send({ type: 'toggle_mute' });
@@ -1945,6 +2018,102 @@ addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#drawer') && !e.target.closest('#artefacts-btn')) toggleDrawer(false);
 });
+
+/* =========================================================
+   Settings (API key, location) and feedback (a GitHub issue)
+   ========================================================= */
+let info = { repo: 'Jonesie/purrnel', can_post_issue: false, version: '' };
+let settingsNow = null, saving = null;
+function openModal(id, focus) { $(id).classList.add('open'); setTimeout(() => $(focus).focus(), 40); }
+function closeModal(id) { $(id).classList.remove('open'); }
+
+function showSettings(m) {
+  settingsNow = m;
+  const first = m.first_run;
+  $('key-row').hidden = first && m.has_key;
+  $('loc-row').hidden = !m.weather || (first && !!m.location);
+  $('setup-title').textContent = first ? 'Hello! Let\u2019s get me set up' : 'Settings';
+  const need = [!m.has_key && 'my API key', m.weather && !m.location && 'where you are'].filter(Boolean);
+  $('setup-intro').textContent = first ? `I just need ${need.join(' and ')} and then we can chat.` : '';
+  $('key').value = '';
+  $('key').placeholder = m.has_key ? 'saved. Type here only to replace it' : 'sk-ant-...';
+  $('loc').value = m.location || m.suggested_location || '';
+  $('setup-err').textContent = '';
+  $('setup-save').disabled = false;
+  $('setup-cancel').textContent = first ? 'Not now' : 'Cancel';
+  openModal('setup', first && !m.has_key ? 'key' : 'loc');
+}
+$('setup-form').onsubmit = (e) => {
+  e.preventDefault();
+  const key = $('key').value.trim(), loc = $('loc').value.trim();
+  const locChanged = !$('loc-row').hidden && loc && loc !== (settingsNow?.location || '');
+  if (!key && !locChanged) { closeModal('setup'); return; }
+  $('setup-err').textContent = '';
+  $('setup-save').disabled = true;
+  saving = { key: !!key, loc: locChanged ? loc : null };
+  send({ type: 'save_settings', api_key: key || null, location: locChanged ? loc : null });
+};
+function settingsResult(m) {
+  $('setup-save').disabled = false;
+  if (m.ok) {
+    if (saving && settingsNow) { if (saving.key) settingsNow.has_key = true; if (saving.loc) settingsNow.location = saving.loc; }
+    saving = null; closeModal('setup'); $('key').value = ''; toast('Saved. Thank you!');
+  }
+  else $('setup-err').textContent = m.error || 'That did not work.';
+}
+$('setup-cancel').onclick = () => closeModal('setup');
+$('settings-btn').onclick = () => send({ type: 'open_settings' });
+
+const URL_LIMIT = 1800;       // GitHub's "new issue" page takes the text from the address, which can't be long
+function feedbackNote() {
+  const n = (($('fb-details').value || '').length > URL_LIMIT && !info.can_post_issue)
+    ? ` Only the first ${URL_LIMIT} characters of the details fit on GitHub's page.` : '';
+  $('fb-note').textContent = `This becomes a public issue on github.com/${info.repo}, so please don\u2019t put anything private in it. `
+    + (info.can_post_issue ? 'I\u2019ll post it for you.' : 'GitHub opens in a new tab. Log in there if it asks, then press \u201cSubmit new issue\u201d.') + n;
+  $('fb-send').textContent = info.can_post_issue ? 'Send to GitHub' : 'Open GitHub';
+}
+function openFeedback(d) {
+  d = d || {};
+  $('fb-kind').value = ['bug', 'idea', 'other'].includes(d.kind) ? d.kind : 'bug';
+  $('fb-title').value = d.title || '';
+  $('fb-details').value = d.details || '';
+  $('fb-err').textContent = '';
+  $('fb-send').disabled = false;
+  feedbackNote();
+  openModal('feedback', d.title ? 'fb-send' : 'fb-title');
+}
+function issueUrl(kind, title, details) {
+  const label = { bug: 'bug', idea: 'enhancement' }[kind];
+  const text = details.trim().slice(0, URL_LIMIT) + (details.trim().length > URL_LIMIT ? '\u2026' : '');
+  const body = (text ? text + '\n\n' : '') + '---\n_Sent from Purrnel' + (info.version ? ' ' + info.version : '') + '_';
+  const q = new URLSearchParams({ title: title.trim().slice(0, 120), body });
+  if (label) q.set('labels', label);
+  return `https://github.com/${info.repo}/issues/new?${q}`;
+}
+$('fb-form').onsubmit = (e) => {
+  e.preventDefault();
+  const kind = $('fb-kind').value, title = $('fb-title').value, details = $('fb-details').value;
+  if (!title.trim()) { $('fb-err').textContent = 'Please give it a short title.'; $('fb-title').focus(); return; }
+  if (info.can_post_issue) {
+    $('fb-err').textContent = '';
+    $('fb-send').disabled = true;
+    send({ type: 'feedback', kind, title, details });
+  } else {
+    // GitHub does the login. Opened straight from the click so the browser allows the new tab.
+    window.open(issueUrl(kind, title, details), '_blank', 'noopener');
+    closeModal('feedback');
+    toast('GitHub is open in a new tab. Press \u201cSubmit new issue\u201d there. Thank you!');
+  }
+};
+function feedbackResult(m) {
+  $('fb-send').disabled = false;
+  if (m.ok) { closeModal('feedback'); toast('Sent! Thank you.' + (m.url ? ' ' + m.url.replace('https://github.com/', '') : '')); }
+  else $('fb-err').textContent = m.error || 'That did not work.';
+}
+$('fb-details').addEventListener('input', feedbackNote);
+$('fb-title').addEventListener('input', () => { $('fb-err').textContent = ''; });
+$('fb-cancel').onclick = () => closeModal('feedback');
+$('feedback-btn').onclick = () => openFeedback();
 
 const pet = () => send({ type: 'pet' });
 catWorld.addEventListener('click', pet);

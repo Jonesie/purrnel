@@ -18,6 +18,13 @@ use tokio::sync::mpsc;
 
 /// How long to prepend silence to a sound when the audio device has gone to sleep.
 const COLD_PREROLL_MS: usize = 500;
+/// Silence before the first sound of a sentence, so the stream has linked up before the first sample.
+const LEAD_MS: usize = 80;
+/// Silence after the last sound of a sentence. When a stream closes, the card or a receiver on a
+/// digital link can mute straight away and swallow the end of the sound.
+const TAIL_MS: usize = 300;
+/// Between the pieces of one sentence there is almost no gap.
+const JOIN_TAIL_MS: usize = 30;
 
 /// One playable piece of a sentence.
 struct Item {
@@ -101,6 +108,9 @@ pub async fn start(hub: Arc<Hub>) -> bool {
     let (wake_tx, mut wake_rx) = mpsc::unbounded_channel::<()>();
     hub.set_speaker(speak_tx);
     hub.set_waker(wake_tx);
+    if cfg.keepalive && keep_alive(&hub) {
+        eprintln!("purrnel: holding the sound card open so sounds are not clipped (PURRNEL_KEEPALIVE=0 to turn off)");
+    }
 
     // Wake the sound card as soon as the user stops talking (see Hub::wake_sound_device).
     let silence = dir.join("silence.wav");
@@ -249,7 +259,6 @@ async fn play(hub: &Arc<Hub>, item: &Item) {
         caption(Duration::ZERO);
         return;
     };
-    let mut modified = false;
     if let Some(ms) = item.max_ms {
         let keep = rate as usize * ms / 1000;
         if samples.len() > keep {
@@ -259,31 +268,69 @@ async fn play(hub: &Arc<Hub>, item: &Item) {
             for (i, s) in samples[from..].iter_mut().enumerate() {
                 *s = (*s as f32 * (1.0 - i as f32 / fade as f32)) as i16;
             }
-            modified = true;
         }
     }
-    // A sleeping sound card eats the start of the first sound, so lead in with silence.
-    let mut lead = Duration::ZERO;
-    if hub.audio_cold() {
-        let mut padded = vec![0i16; rate as usize * COLD_PREROLL_MS / 1000];
-        padded.extend_from_slice(&samples);
-        samples = padded;
-        lead = Duration::from_millis(COLD_PREROLL_MS as u64);
-        modified = true;
-    }
-    if modified {
-        // Sound effects are shared files: play a modified copy, never edit the original.
-        let target = if item.temp { path.clone() } else { std::env::temp_dir().join("purrnel-padded.wav") };
-        if std::fs::write(&target, wav_bytes(rate, &samples)).is_err() {
-            return;
-        }
-        play_file(hub, &target, rate, &samples, item.mouth, caption, lead).await;
-        if !item.temp {
-            let _ = std::fs::remove_file(&target);
-        }
+    // A sleeping sound card eats the start of a sound and a closing stream can swallow its end,
+    // so every sound gets a little silence around it (more after a long idle, if the card can sleep).
+    let first = item.caption.is_some() || item.ambient || item.done;
+    let last = item.ambient || item.done;
+    let cold = hub.audio_cold();
+    let lead_ms = if cold { COLD_PREROLL_MS } else if first { LEAD_MS } else { 0 };
+    let tail_ms = if last { TAIL_MS } else { JOIN_TAIL_MS };
+    samples = pad(&samples, rate, lead_ms, tail_ms);
+    let lead = Duration::from_millis(lead_ms as u64);
+    // Sound effects are shared files: play a padded copy, never edit the original.
+    let target = if item.temp { path.clone() } else { std::env::temp_dir().join("purrnel-padded.wav") };
+    if std::fs::write(&target, wav_bytes(rate, &samples)).is_err() {
         return;
     }
-    play_file(hub, path, rate, &samples, item.mouth, caption, lead).await;
+    play_file(hub, &target, rate, &samples, item.mouth, caption, lead).await;
+    if !item.temp {
+        let _ = std::fs::remove_file(&target);
+    }
+}
+
+/// `samples` with `lead_ms` of silence before and `tail_ms` after.
+fn pad(samples: &[i16], rate: u32, lead_ms: usize, tail_ms: usize) -> Vec<i16> {
+    let (lead, tail) = (rate as usize * lead_ms / 1000, rate as usize * tail_ms / 1000);
+    let mut out = Vec::with_capacity(lead + samples.len() + tail);
+    out.resize(lead, 0);
+    out.extend_from_slice(samples);
+    out.resize(lead + samples.len() + tail, 0);
+    out
+}
+
+/// A silent stream that never ends keeps the sound card awake. A card that suspends when idle
+/// clips the start of the next sound, and on a digital link (S/PDIF, HDMI) the amplifier or TV
+/// loses the signal each time the stream stops and clips both ends. Restarts itself if it dies.
+fn keep_alive(hub: &Arc<Hub>) -> bool {
+    let spawn = || {
+        Command::new("paplay")
+            .args(["--raw", "--rate=22050", "--channels=1", "--format=s16le", "/dev/zero"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+    };
+    let Ok(first) = spawn() else { return false };
+    hub.set_keepalive(true);
+    let hub = hub.clone();
+    tokio::spawn(async move {
+        let mut child = first;
+        loop {
+            let _ = child.wait().await;
+            hub.set_keepalive(false);
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            match spawn() {
+                Ok(c) => {
+                    child = c;
+                    hub.set_keepalive(true);
+                }
+                Err(_) => return,
+            }
+        }
+    });
+    true
 }
 
 async fn play_file(
@@ -336,7 +383,7 @@ fn load_sfx(dir: &Path) -> HashMap<&'static str, Vec<PathBuf>> {
         }
         let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
         let name = stem.trim_end_matches(|c: char| c.is_ascii_digit());
-        if let Some(kind) = ["meow", "mew", "mrrp", "purr", "chatter", "hiss"].into_iter().find(|k| *k == name) {
+        if let Some(kind) = ["meow", "mew", "mrrp", "purr", "chatter", "hiss", "yelp"].into_iter().find(|k| *k == name) {
             out.entry(kind).or_default().push(p);
         }
     }
@@ -466,6 +513,16 @@ fn parse_wav(b: &[u8]) -> Option<(u32, Vec<i16>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pad_adds_silence_around_a_sound() {
+        let out = pad(&[5, 6, 7], 1000, 20, 30);
+        assert_eq!(out.len(), 20 + 3 + 30);
+        assert!(out[..20].iter().all(|s| *s == 0));
+        assert_eq!(&out[20..23], &[5, 6, 7]);
+        assert!(out[23..].iter().all(|s| *s == 0));
+        assert_eq!(pad(&[1], 1000, 0, 0), vec![1]);
+    }
 
     #[test]
     fn envelope_follows_loudness() {

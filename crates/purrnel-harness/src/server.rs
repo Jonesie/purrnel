@@ -5,6 +5,7 @@ use crate::hub::Hub;
 use crate::protocol::{In, Out};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::Router;
@@ -32,8 +33,25 @@ async fn index(State(hub): State<Arc<Hub>>) -> impl IntoResponse {
     ([("cache-control", "no-store")], Html(html))
 }
 
-async fn ws_upgrade(ws: WebSocketUpgrade, State(hub): State<Arc<Hub>>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| client(socket, hub))
+/// Only the kiosk page itself may drive the cat. Browsers let any website open a websocket to
+/// localhost, and this socket can submit prompts and save settings, so check where it came from.
+/// (Not a browser at all, so no Origin header: fine.)
+pub fn origin_ok(origin: Option<&str>, port: u16) -> bool {
+    match origin {
+        None => true,
+        Some(o) => [format!("http://127.0.0.1:{port}"), format!("http://localhost:{port}"), format!("http://[::1]:{port}")]
+            .iter()
+            .any(|ok| ok == o),
+    }
+}
+
+async fn ws_upgrade(ws: WebSocketUpgrade, headers: HeaderMap, State(hub): State<Arc<Hub>>) -> impl IntoResponse {
+    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+    if !origin_ok(origin, hub.cfg.port) {
+        eprintln!("purrnel: refused a websocket from {}", origin.unwrap_or("?"));
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    ws.on_upgrade(move |socket| client(socket, hub)).into_response()
 }
 
 async fn client(socket: WebSocket, hub: Arc<Hub>) {
@@ -52,6 +70,14 @@ async fn client(socket: WebSocket, hub: Arc<Hub>) {
     }
     if let Some(w) = hub.weather() {
         snapshot.push(w.to_out());
+    }
+    snapshot.push(Out::Info {
+        repo: hub.cfg.repo.clone(),
+        can_post_issue: hub.cfg.github_token.is_some(),
+        version: env!("CARGO_PKG_VERSION").into(),
+    });
+    if crate::settings::setup_needed(&hub) {
+        snapshot.push(crate::settings::dialog(&hub, true));
     }
     if let Some(id) = hub.current_artefact.lock().unwrap().clone() {
         if let Ok((meta, html)) = hub.store.lock().unwrap().get(&id) {
@@ -107,7 +133,7 @@ async fn handle(hub: &Arc<Hub>, msg: In) {
     match &msg {
         In::Text { .. } | In::Show { .. } | In::Close | In::Pet => hub.wake(),
         In::ToggleMute | In::ConfirmAnswer { .. } => hub.touch(),
-        In::DataGet { .. } | In::DataSet { .. } | In::Sfx { .. } => {}
+        In::DataGet { .. } | In::DataSet { .. } | In::Sfx { .. } | In::OpenSettings | In::SaveSettings { .. } | In::Feedback { .. } => {}
     }
     match msg {
         In::Text { text } => hub.submit(text, true).await,
@@ -124,6 +150,15 @@ async fn handle(hub: &Arc<Hub>, msg: In) {
             }
         }
         In::Close => hub.close_artefact(),
+        In::OpenSettings => hub.emit(crate::settings::dialog(hub, false)),
+        In::SaveSettings { api_key, location } => {
+            let hub = hub.clone();
+            tokio::spawn(async move { crate::settings::save(&hub, api_key, location).await });
+        }
+        In::Feedback { kind, title, details } => {
+            let hub = hub.clone();
+            tokio::spawn(async move { crate::feedback::submit(&hub, &kind, &title, &details).await });
+        }
         In::DataGet { id, req, key } => {
             let value = hub.store.lock().unwrap().data_get(&id, &key).ok().flatten();
             hub.emit(Out::DataReply { id, req, value });
@@ -133,5 +168,21 @@ async fn handle(hub: &Arc<Hub>, msg: In) {
                 eprintln!("purrnel: data_set {id}/{key}: {e}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::origin_ok;
+
+    #[test]
+    fn only_the_kiosk_page_may_connect() {
+        assert!(origin_ok(None, 7979));
+        assert!(origin_ok(Some("http://127.0.0.1:7979"), 7979));
+        assert!(origin_ok(Some("http://localhost:7979"), 7979));
+        assert!(!origin_ok(Some("https://evil.example"), 7979));
+        assert!(!origin_ok(Some("http://127.0.0.1:8080"), 7979));
+        assert!(!origin_ok(Some("http://127.0.0.1:7979.evil.example"), 7979));
+        assert!(!origin_ok(Some("null"), 7979));
     }
 }

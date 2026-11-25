@@ -24,6 +24,8 @@ pub struct Config {
     /// Piper length scale: below 1.0 is faster.
     pub speed: f32,
     pub sfx_dir: PathBuf,
+    /// Keep a silent stream open so the sound card (and any amp on a digital link) never goes to sleep.
+    pub keepalive: bool,
     pub mic_source: Option<String>,
     pub camera: String,
     /// Show the real local weather in the window.
@@ -34,6 +36,11 @@ pub struct Config {
     pub lon: Option<f64>,
     pub weather_url: String,
     pub geocode_url: String,
+    /// Token that lets feedback go straight to GitHub as an issue (otherwise GitHub opens in the browser).
+    pub github_token: Option<String>,
+    /// The `owner/name` repository feedback is filed against.
+    pub repo: String,
+    pub github_api: String,
 }
 
 fn env(name: &str) -> Option<String> {
@@ -42,6 +49,16 @@ fn env(name: &str) -> Option<String> {
 
 fn home() -> PathBuf {
     env("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+}
+
+/// Where settings the user typed in are kept (`~/.config/purrnel`, or `PURRNEL_CONFIG`).
+pub fn config_dir() -> PathBuf {
+    env("PURRNEL_CONFIG").map(PathBuf::from).unwrap_or_else(|| home().join(".config/purrnel"))
+}
+
+/// One saved setting: the trimmed contents of `<config dir>/<name>`, if there is any.
+fn saved(name: &str) -> Option<String> {
+    std::fs::read_to_string(config_dir().join(name)).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
 fn find_in_path(bin: &str) -> Option<PathBuf> {
@@ -55,12 +72,7 @@ fn find_in_path(bin: &str) -> Option<PathBuf> {
 impl Config {
     pub fn from_env() -> Self {
         let root = env("PURRNEL_ROOT").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
-        let api_key = env("ANTHROPIC_API_KEY").or_else(|| {
-            std::fs::read_to_string(home().join(".config/purrnel/api_key"))
-                .ok()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-        });
+        let api_key = env("ANTHROPIC_API_KEY").or_else(|| saved("api_key"));
         Config {
             port: env("PURRNEL_PORT").and_then(|v| v.parse().ok()).unwrap_or(7979),
             data_dir: env("PURRNEL_DATA")
@@ -91,16 +103,20 @@ impl Config {
             pitch: env("PURRNEL_PITCH").and_then(|v| v.parse().ok()).unwrap_or(1.3),
             speed: env("PURRNEL_SPEED").and_then(|v| v.parse().ok()).unwrap_or(0.92),
             sfx_dir: env("PURRNEL_SFX").map(PathBuf::from).unwrap_or_else(|| root.join("assets/sfx")),
+            keepalive: env("PURRNEL_KEEPALIVE").as_deref() != Some("0"),
             mic_source: env("PURRNEL_MIC"),
             camera: env("PURRNEL_CAMERA").unwrap_or_else(|| "/dev/video0".into()),
             weather: env("PURRNEL_WEATHER").as_deref() != Some("0"),
-            location: env("PURRNEL_LOCATION"),
+            location: env("PURRNEL_LOCATION").or_else(|| saved("location")),
             lat: env("PURRNEL_LAT").and_then(|v| v.parse().ok()),
             lon: env("PURRNEL_LON").and_then(|v| v.parse().ok()),
             weather_url: env("PURRNEL_WEATHER_URL")
                 .unwrap_or_else(|| "https://api.open-meteo.com/v1/forecast".into()),
             geocode_url: env("PURRNEL_GEOCODE_URL")
                 .unwrap_or_else(|| "https://geocoding-api.open-meteo.com/v1/search".into()),
+            github_token: env("PURRNEL_GITHUB_TOKEN").or_else(|| saved("github_token")),
+            repo: env("PURRNEL_REPO").unwrap_or_else(|| "Jonesie/purrnel".into()),
+            github_api: env("PURRNEL_GITHUB_API").unwrap_or_else(|| "https://api.github.com".into()),
         }
     }
 }

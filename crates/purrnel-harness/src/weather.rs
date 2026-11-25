@@ -87,23 +87,37 @@ pub fn city_from_timezone(tz: &str) -> Option<String> {
     }
 }
 
-pub fn pick_place(cfg: &Config) -> Option<Place> {
+/// The city of this machine's timezone: the settings dialog suggests it as the place.
+pub fn suggested_city() -> Option<String> {
+    system_timezone().and_then(|tz| city_from_timezone(&tz))
+}
+
+/// `location` is the place currently set (typed in the settings dialog, or `PURRNEL_LOCATION`).
+pub fn pick_place(cfg: &Config, location: Option<&str>) -> Option<Place> {
     if let (Some(lat), Some(lon)) = (cfg.lat, cfg.lon) {
         return Some(Place::Coords(lat, lon));
     }
-    if let Some(name) = &cfg.location {
-        return Some(Place::Name(name.clone(), None));
+    if let Some(name) = location {
+        return Some(Place::Name(name.to_string(), None));
     }
     let tz = system_timezone()?;
     let city = city_from_timezone(&tz)?;
     Some(Place::Name(city, Some(tz)))
 }
 
-/// Choose a result from an Open-Meteo geocoding reply, preferring one in `tz`.
-pub fn parse_geocode(v: &Value, tz: Option<&str>) -> Option<(f64, f64)> {
+/// Choose a result from an Open-Meteo geocoding reply. `hint` is what followed the comma in
+/// "Auckland, New Zealand" (a country, country code or region); otherwise prefer one in `tz`.
+pub fn parse_geocode(v: &Value, tz: Option<&str>, hint: Option<&str>) -> Option<(f64, f64)> {
     let results = v.get("results")?.as_array()?;
-    let pick = tz
-        .and_then(|tz| results.iter().find(|r| r.get("timezone").and_then(Value::as_str) == Some(tz)))
+    let by_hint = hint.map(str::trim).filter(|h| !h.is_empty()).and_then(|h| {
+        results.iter().find(|r| {
+            ["country", "country_code", "admin1", "admin2"]
+                .iter()
+                .any(|k| r.get(*k).and_then(Value::as_str).is_some_and(|s| s.eq_ignore_ascii_case(h)))
+        })
+    });
+    let pick = by_hint
+        .or_else(|| tz.and_then(|tz| results.iter().find(|r| r.get("timezone").and_then(Value::as_str) == Some(tz))))
         .or_else(|| results.first())?;
     Some((pick.get("latitude")?.as_f64()?, pick.get("longitude")?.as_f64()?))
 }
@@ -134,13 +148,18 @@ async fn locate(client: &reqwest::Client, cfg: &Config, place: &Place) -> Result
     match place {
         Place::Coords(lat, lon) => Ok((*lat, *lon)),
         Place::Name(name, tz) => {
+            // "Auckland, New Zealand": the geocoder only searches by name, the rest narrows the answer.
+            let (query, hint) = match name.split_once(',') {
+                Some((a, b)) => (a.trim(), Some(b.trim())),
+                None => (name.trim(), None),
+            };
             let v = get_json(
                 client,
                 &cfg.geocode_url,
-                &[("name", name.clone()), ("count", "10".into()), ("language", "en".into())],
+                &[("name", query.to_string()), ("count", "10".into()), ("language", "en".into())],
             )
             .await?;
-            parse_geocode(&v, tz.as_deref()).ok_or_else(|| format!("no place called {name:?}"))
+            parse_geocode(&v, tz.as_deref(), hint).ok_or_else(|| format!("no place called {name:?}"))
         }
     }
 }
@@ -160,52 +179,82 @@ async fn fetch(client: &reqwest::Client, cfg: &Config, lat: f64, lon: f64) -> Re
     parse_current(&v).ok_or_else(|| "unexpected reply".to_string())
 }
 
-/// Keeps the window's weather up to date: once at start, then every 15 minutes.
+/// Can this place name be found? `Unknown` means we couldn't tell (offline), so it is accepted.
+#[derive(Debug, PartialEq)]
+pub enum Check {
+    Found,
+    NotFound,
+    Unknown,
+}
+
+pub async fn check_place(cfg: &Config, name: &str) -> Check {
+    let Ok(client) = reqwest::Client::builder().timeout(Duration::from_secs(10)).build() else { return Check::Unknown };
+    match locate(&client, cfg, &Place::Name(name.to_string(), None)).await {
+        Ok(_) => Check::Found,
+        Err(e) if e.starts_with("no place called") => Check::NotFound,
+        Err(_) => Check::Unknown,
+    }
+}
+
+/// Keeps the window's weather up to date: once at start, then every 15 minutes, and straight away
+/// when the place changes in the settings dialog.
 pub async fn run(hub: Arc<Hub>) {
     let cfg = hub.cfg.clone();
     if !cfg.weather {
         return;
     }
-    let Some(place) = pick_place(&cfg) else {
-        eprintln!("purrnel: weather off: can't tell where you are (set PURRNEL_LOCATION=\"Your City\")");
-        return;
-    };
     let client = match reqwest::Client::builder().timeout(Duration::from_secs(15)).build() {
         Ok(c) => c,
         Err(_) => return,
     };
-    let mut coords: Option<(f64, f64)> = None;
+    let mut cached: Option<(Place, (f64, f64))> = None;
     let mut reported_error = false;
+    let mut reported_nowhere = false;
     loop {
-        let result = async {
-            let (lat, lon) = match coords {
-                Some(c) => c,
-                None => {
-                    let c = locate(&client, &cfg, &place).await?;
-                    coords = Some(c);
-                    c
+        let wait = match pick_place(&cfg, hub.location().as_deref()) {
+            None => {
+                if !reported_nowhere {
+                    eprintln!("purrnel: weather off until you say where you are (settings, or PURRNEL_LOCATION=\"Your City\")");
+                    reported_nowhere = true;
                 }
-            };
-            fetch(&client, &cfg, lat, lon).await
-        }
-        .await;
-        let wait = match result {
-            Ok(w) => {
-                eprintln!("purrnel: weather: {} ({:.0} C, cloud {:.0}%, wind {:.0} km/h)", w.describe(), w.temp, w.cloud, w.wind);
-                reported_error = false;
-                hub.set_weather(w);
-                Duration::from_secs(15 * 60)
+                Duration::from_secs(3600)
             }
-            Err(e) => {
-                // Being offline is normal and the cat already handles it; say it once.
-                if !reported_error {
-                    eprintln!("purrnel: weather unavailable ({e}); will keep trying");
-                    reported_error = true;
+            Some(place) => {
+                reported_nowhere = false;
+                let result = async {
+                    let (lat, lon) = match &cached {
+                        Some((p, c)) if *p == place => *c,
+                        _ => {
+                            let c = locate(&client, &cfg, &place).await?;
+                            cached = Some((place.clone(), c));
+                            c
+                        }
+                    };
+                    fetch(&client, &cfg, lat, lon).await
                 }
-                Duration::from_secs(120)
+                .await;
+                match result {
+                    Ok(w) => {
+                        eprintln!("purrnel: weather: {} ({:.0} C, cloud {:.0}%, wind {:.0} km/h)", w.describe(), w.temp, w.cloud, w.wind);
+                        reported_error = false;
+                        hub.set_weather(w);
+                        Duration::from_secs(15 * 60)
+                    }
+                    Err(e) => {
+                        // Being offline is normal and the cat already handles it; say it once.
+                        if !reported_error {
+                            eprintln!("purrnel: weather unavailable ({e}); will keep trying");
+                            reported_error = true;
+                        }
+                        Duration::from_secs(120)
+                    }
+                }
             }
         };
-        tokio::time::sleep(wait).await;
+        tokio::select! {
+            _ = tokio::time::sleep(wait) => {}
+            _ = hub.weather_kick.notified() => { reported_error = false; }
+        }
     }
 }
 
@@ -228,11 +277,11 @@ mod tests {
             {"name": "Auckland", "latitude": 38.0, "longitude": -122.0, "timezone": "America/Los_Angeles"},
             {"name": "Auckland", "latitude": -36.85, "longitude": 174.76, "timezone": "Pacific/Auckland"},
         ]});
-        assert_eq!(parse_geocode(&v, Some("Pacific/Auckland")), Some((-36.85, 174.76)));
+        assert_eq!(parse_geocode(&v, Some("Pacific/Auckland"), None), Some((-36.85, 174.76)));
         // without a timezone, or with no match, the first result wins
-        assert_eq!(parse_geocode(&v, None), Some((38.0, -122.0)));
-        assert_eq!(parse_geocode(&v, Some("Asia/Tokyo")), Some((38.0, -122.0)));
-        assert_eq!(parse_geocode(&json!({}), None), None);
+        assert_eq!(parse_geocode(&v, None, None), Some((38.0, -122.0)));
+        assert_eq!(parse_geocode(&v, Some("Asia/Tokyo"), None), Some((38.0, -122.0)));
+        assert_eq!(parse_geocode(&json!({}), None, None), None);
     }
 
     #[test]
@@ -254,8 +303,21 @@ mod tests {
         cfg.lat = Some(-41.29);
         cfg.lon = Some(174.78);
         cfg.location = Some("Elsewhere".into());
-        assert_eq!(pick_place(&cfg), Some(Place::Coords(-41.29, 174.78)));
+        assert_eq!(pick_place(&cfg, Some("Elsewhere")), Some(Place::Coords(-41.29, 174.78)));
         cfg.lat = None;
-        assert_eq!(pick_place(&cfg), Some(Place::Name("Elsewhere".into(), None)));
+        assert_eq!(pick_place(&cfg, Some("Elsewhere")), Some(Place::Name("Elsewhere".into(), None)));
+    }
+
+    #[test]
+    fn a_country_after_the_comma_picks_the_right_town() {
+        let v = json!({"results": [
+            {"name": "Hamilton", "latitude": 43.2, "longitude": -79.9, "country": "Canada", "country_code": "CA", "admin1": "Ontario", "timezone": "America/Toronto"},
+            {"name": "Hamilton", "latitude": -37.78, "longitude": 175.28, "country": "New Zealand", "country_code": "NZ", "admin1": "Waikato", "timezone": "Pacific/Auckland"},
+        ]});
+        assert_eq!(parse_geocode(&v, None, Some("New Zealand")), Some((-37.78, 175.28)));
+        assert_eq!(parse_geocode(&v, None, Some("nz")), Some((-37.78, 175.28)));
+        assert_eq!(parse_geocode(&v, None, Some("Ontario")), Some((43.2, -79.9)));
+        // a hint that matches nothing falls back to the first result rather than failing
+        assert_eq!(parse_geocode(&v, None, Some("Narnia")), Some((43.2, -79.9)));
     }
 }

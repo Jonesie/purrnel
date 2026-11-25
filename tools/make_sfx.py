@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesise cat noises (meow, mew, mrrp, purr, chatter, hiss) into assets/sfx/*.wav.
+"""Synthesise cat noises (meow, mew, mrrp, purr, chatter, hiss, yelp) into assets/sfx/*.wav.
 
 A buzzy glottal source with a gliding pitch is run through three resonators whose
 centre frequencies glide too (the "ee-a-ow" vowel shape of a meow). These are a
@@ -126,29 +126,88 @@ def chatter(seed, rate, length):
     return x * gate + clicks * np.max(np.abs(x))
 
 
-def hiss(seed, length):
-    """An angry 'ffff-sssssh': a spit of noise, then a long airy hiss with a low growl under it."""
-    rng = np.random.default_rng(seed)
+def _shape(noise, gain_at, nfft=512, hop=128):
+    """Run noise through a filter whose shape changes over time (STFT overlap-add).
+    gain_at(t_seconds, freqs) returns the gain per frequency bin."""
+    win = np.hanning(nfft)
+    f = np.fft.rfftfreq(nfft, 1 / RATE)
+    out = np.zeros(len(noise) + nfft)
+    for start in range(0, len(noise) - nfft, hop):
+        spec = np.fft.rfft(noise[start:start + nfft] * win) * gain_at((start + nfft / 2) / RATE, f)
+        out[start:start + nfft] += np.fft.irfft(spec, nfft) * win
+    return out[:len(noise)]
+
+
+def _lowpass_noise(rng, n, cutoff_hz):
+    """Smooth random wobble in 0..1, to make breath uneven the way turbulence is."""
+    w = rng.standard_normal(n)
+    k = np.hanning(int(RATE / cutoff_hz) * 2 + 1)
+    w = np.convolve(w, k / k.sum(), mode="same")
+    w = (w - w.min()) / (np.ptp(w) + 1e-9)
+    return w
+
+
+def _one_hiss(rng, length, peak_hz):
+    """'Hh-aaa-ssssh': an explosive spit, a breathy rasp that opens into broad turbulent hiss, then it tails off."""
     n = int(length * RATE)
+    T = length
     t = np.arange(n) / RATE
     noise = rng.standard_normal(n)
-    # Shape the noise in the frequency domain: nothing below ~1.2 kHz, a broad peak around 4-6 kHz.
-    spec = np.fft.rfft(noise)
-    f = np.fft.rfftfreq(n, 1 / RATE)
-    shape = np.clip((f - 1200) / 1800, 0, 1) * np.exp(-(((f - 5200) / 3600) ** 2))
-    air = np.fft.irfft(spec * shape, n)
-    # A fast, uneven shimmer makes it sound breathed rather than hissed by a machine.
-    shimmer = 0.8 + 0.2 * np.sin(2 * np.pi * 9 * t + 1.7) + 0.08 * rng.standard_normal(n).cumsum() / np.sqrt(np.arange(1, n + 1))
-    env = curve([(0, 0), (0.03, 1), (0.12, 0.55), (0.3, 0.95), (0.8, 0.8), (1, 0)], n)
-    spit = np.zeros(n)  # the little 'ptt' before the hiss
-    k = int(0.035 * RATE)
-    spit[:k] = rng.standard_normal(k) * np.hanning(2 * k)[k:] * 1.6
-    # A rough growl: pulse-trained low harmonics, quiet.
-    f0 = 95 + 12 * np.sin(2 * np.pi * 3 * t)
-    ph = np.cumsum(f0) / RATE
-    growl = sum(np.sin(2 * np.pi * h * ph) / h for h in range(1, 6)) * (0.6 + 0.4 * rng.standard_normal(n).clip(-1, 1))
-    x = air * shimmer * env + 0.12 * np.max(np.abs(air)) * spit + 0.07 * np.max(np.abs(air)) * growl * env
-    return x
+
+    def gain(tt, f):
+        u = tt / T
+        # the energy glides from a mouthy 'haa' (~1.8 kHz) up to the hiss proper, then eases back down
+        fc = np.interp(u, [0, 0.22, 0.7, 1.0], [1800, peak_hz, peak_hz * 0.93, peak_hz * 0.7])
+        sig = np.interp(u, [0, 0.22, 1.0], [1500, 2600, 2300])
+        g = np.exp(-0.5 * ((f - fc) / sig) ** 2)
+        g += 0.5 * np.exp(-0.5 * ((f - 1500) / 450) ** 2) * np.clip(1 - u * 3, 0, 1)    # throat formants early on
+        g += 0.3 * np.exp(-0.5 * ((f - 2700) / 600) ** 2) * np.clip(1 - u * 2.5, 0, 1)
+        return g * np.clip((f - 700) / 900, 0, 1) * (1 + 0.5 * np.clip(1 - u * 5, 0, 1))  # roll off the lows
+
+    air = _shape(noise, gain)
+    air /= np.max(np.abs(air)) + 1e-9
+    # uneven, turbulent loudness: a build, a ragged sustain, a slow tail
+    wob = _lowpass_noise(rng, n, 28)
+    env = curve([(0, 0), (0.015, 0.9), (0.06, 0.45), (0.25, 0.9), (0.7, 0.85), (1, 0)], n)
+    air *= env * (0.62 + 0.38 * wob)
+    # the spit: a sharp, crackly burst at the very start
+    k = int(0.05 * RATE)
+    spit = np.zeros(n)
+    spit[:k] = rng.standard_normal(k) * np.exp(-np.arange(k) / (0.012 * RATE))
+    crackle = (rng.random(n) > 0.9985).astype(float) * rng.standard_normal(n) * 1.2 * np.exp(-t / 0.18)
+    k2 = np.hanning(15)
+    crackle = np.convolve(crackle, k2 / k2.sum(), mode="same")
+    # a rough voiced rasp under the first part, like the 'aaa' of a real hiss
+    rasp = voice(length, [(0, 210), (0.5, 170), (1, 120)],
+                 [([(0, 750), (1, 650)], 160, 1.0), ([(0, 1700), (1, 1500)], 220, 0.7)],
+                 [(0, 0), (0.08, 1), (0.5, 0.7), (0.8, 0), (1, 0)], vibrato=0, breath=0.5, rng=rng)
+    rasp /= np.max(np.abs(rasp)) + 1e-9
+    return air + 0.55 * spit + 0.25 * crackle + 0.2 * rasp * (0.5 + 0.5 * wob)
+
+
+def hiss(seed, length, peak_hz=5200, double=False):
+    rng = np.random.default_rng(seed)
+    if not double:
+        x = _one_hiss(rng, length, peak_hz)
+    else:  # 'hss-HSSSS': a quick warning hiss then the real one
+        a = _one_hiss(rng, length * 0.35, peak_hz * 0.9)
+        b = _one_hiss(rng, length * 0.65, peak_hz)
+        x = np.concatenate([a * 0.75, np.zeros(int(0.07 * RATE)), b])
+    return np.tanh(1.05 * x / (np.max(np.abs(x)) + 1e-9)) * 0.9
+
+
+def yelp(seed, yips, base):
+    """A startled dog's 'yip-yip!': each yip is a short voiced burst whose pitch shoots up then falls away."""
+    rng = np.random.default_rng(seed)
+    parts = []
+    for i, (dur, lift) in enumerate(yips):
+        lo, hi = base * (1 + 0.06 * i), base * lift * (1 + 0.06 * i)
+        x = voice(dur, [(0, lo), (0.22, hi), (0.6, hi * 0.82), (1, lo * 0.7)],
+                  [([(0, 900), (0.25, 1500), (1, 1000)], 150, 1.0), ([(0, 2400), (1, 2100)], 220, 0.7), ([(0, 3400), (1, 3000)], 260, 0.3)],
+                  [(0, 0), (0.05, 1), (0.55, 0.85), (1, 0)], vibrato=14, breath=0.06, rng=rng)
+        parts.append(x / (np.max(np.abs(x)) + 1e-9) * (1.0 - 0.1 * i))
+        parts.append(np.zeros(int(0.07 * RATE)))
+    return np.concatenate(parts[:-1])
 
 
 def save(name, x, peak=0.45):
@@ -173,5 +232,7 @@ if __name__ == "__main__":
         save(f"purr{i}.wav", purr(40 + i, length), peak=0.3)
     for i, (rate, length) in enumerate([(11, 1.0), (13, 1.2)], 1):
         save(f"chatter{i}.wav", chatter(50 + i, rate, length), peak=0.4)
-    for i, length in enumerate([1.0, 1.25, 1.5], 1):
-        save(f"hiss{i}.wav", hiss(60 + i, length), peak=0.6)
+    for i, (length, hz, double) in enumerate([(1.1, 5200, False), (1.4, 4300, False), (1.6, 5600, True)], 1):
+        save(f"hiss{i}.wav", hiss(60 + i, length, hz, double), peak=0.6)
+    for i, (yips, base) in enumerate([([(0.24, 1.9), (0.2, 2.0)], 620), ([(0.2, 1.8), (0.17, 1.9), (0.15, 2.0)], 700)], 1):
+        save(f"yelp{i}.wav", yelp(70 + i, yips, base), peak=0.5)

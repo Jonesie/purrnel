@@ -29,16 +29,17 @@ curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessa
 You also need `nix` (whisper.cpp comes from nixpkgs), `pipx install piper-tts`, `ffmpeg`
 (camera and the voice pitch shift) and PulseAudio/PipeWire (`parec`, `paplay`).
 
-Put an Anthropic API key in `~/.config/purrnel/api_key` (or `ANTHROPIC_API_KEY`), then:
-
 ```bash
 ~/dev/purrnel/scripts/dev.sh
 ```
 
-and open <http://127.0.0.1:7979>. Just talk. `M` toggles mute, `/` focuses the keyboard box.
+and open <http://127.0.0.1:7979>. The first time, if there is no API key or no place for the
+weather, a box asks for them (the key is saved to `~/.config/purrnel/api_key`, readable by you
+only, and the place to `~/.config/purrnel/location`). The sliders button in the corner reopens it
+any time. You can also set `ANTHROPIC_API_KEY` or write those files yourself. Just talk. `M` toggles mute, `/` focuses the keyboard box.
 Click the cat to pet her (she purrs). Click the TV to reopen the last artefact.
 
-Without a key the cat still starts, tells you it has no brain, and everything local works.
+Without a key the cat still starts, tells you it has no brain (and asks for the key), and everything local works.
 While you test, watch the terminal: each turn logs how long every stage took, e.g.
 `[+ 360ms] transcribed`, `[+1500ms] first token`, `[+2100ms] speaking`.
 
@@ -67,7 +68,7 @@ time the camera pulls back and she lives her life.
   day. A tree outside gets the odd visit from a sparrow, blue tit or robin (not in the rain). When
   she's free (not talking, busy or asleep) she hops on the sill and chatters at them.
 - **Visitors:** about as often as the birds, a dog wanders into the lounge. She freezes, her back
-  and tail puff up and she hisses until it bolts. Birds and dogs never visit at the same time, and
+  and tail puff up and she hisses until it yelps and bolts. Birds and dogs never visit at the same time, and
   neither comes while she is talking to you.
 - **Camera:** `look` takes one picture when it helps. It never streams, and never while muted.
 - **Artefacts:** Claude builds them as sandboxed HTML pages with versioned history. They open
@@ -80,6 +81,23 @@ coarse place is sent: by default the city from your system timezone (for example
 becomes "Auckland"), which is looked up once to get coordinates, and those coordinates go with each
 weather request. Nothing else leaves the machine. Set `PURRNEL_LOCATION="Your Town"` for a more
 exact spot, or `PURRNEL_WEATHER=0` to switch it off. Offline, the window keeps its last weather.
+The place you type in the settings box can be "Town" or "Town, Country" and applies straight away.
+
+### Feedback
+
+The speech-bubble button in the corner opens a short form (bug, idea or other, a title and some
+details) that becomes an issue on this GitHub repository. You can also just ask the cat ("tell the
+developers the dog is too big") and she fills the form in for you to check. **Issues on a public
+repository are public**, and the form says so.
+
+GitHub does the login. Normally the button opens GitHub's own "new issue" page in a new tab with
+everything filled in, and you press *Submit new issue* (it asks you to log in first if you aren't).
+If you give Purrnel a token (`PURRNEL_GITHUB_TOKEN`, or `~/.config/purrnel/github_token`, a
+fine-grained token with *Issues: write* on the repository) it posts the issue itself instead. Fork
+it? Point feedback at your own repository with `PURRNEL_REPO=owner/name`.
+
+The websocket only accepts connections from the page itself, so another website open in your
+browser cannot talk to the cat or change her settings.
 
 ## How it fits together
 
@@ -103,7 +121,12 @@ Piper worker (pitch-shifted) + cat sounds -> paplay (+ mouth levels) -+--> webso
 Cat noises written as words ("mrow", "mew", "mrrp", "purr") are played as sounds instead of
 being spoken. **The sounds are synthetic and a first attempt**: replace them with real
 recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`, `chatter1.wav`,
-`hiss1.wav`... into `assets/sfx/`. The hiss also plays for the `hiss` emote.
+`hiss1.wav`, `yelp1.wav`... into `assets/sfx/`. The hiss also plays for the `hiss` emote.
+
+**Sounds clipped at the start or end?** Sound cards that suspend when idle (and amplifiers or TVs on
+a digital S/PDIF or HDMI link, which lose the signal each time a stream stops) can swallow the
+first or last moments of a sound. Purrnel holds a silent stream open the whole time it runs, and
+pads every sound with a little silence. `PURRNEL_KEEPALIVE=0` turns the silent stream off.
 
 ## Configuration (environment variables)
 
@@ -117,6 +140,9 @@ recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`, `chatt
 | `PURRNEL_SPEED` | `0.92` Piper length scale (lower is faster) |
 | `PURRNEL_WEATHER` | on; `0` turns off the real-weather lookup (the window then shows fair weather) |
 | `PURRNEL_LOCATION` | place name for the weather; default is the city of your system timezone |
+| `PURRNEL_CONFIG` | `~/.config/purrnel` (where the saved key, location and token live) |
+| `PURRNEL_GITHUB_TOKEN`, `PURRNEL_REPO` | optional token to post feedback issues directly; repository for them (`Jonesie/purrnel`) |
+| `PURRNEL_KEEPALIVE` | on; `0` stops the silent stream that keeps the sound card awake (see below) |
 | `PURRNEL_LAT`, `PURRNEL_LON` | exact coordinates for the weather (override the place name) |
 | `PURRNEL_PORT` | `7979` (bound to localhost only) |
 | `PURRNEL_DATA` | `~/.local/share/purrnel` |
@@ -128,7 +154,7 @@ recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`, `chatt
 ## Tests
 
 ```bash
-cargo test                              # 44 unit tests
+cargo test                              # 53 unit tests
 cargo test -- --ignored camera          # needs a webcam
 ```
 

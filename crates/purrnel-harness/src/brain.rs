@@ -42,7 +42,7 @@ Artefacts:
 
 The internet: you can search the web (web_search) and read pages (web_fetch) for anything current or that you don't know: news, weather, sports, prices, facts. Say a very short acknowledgement first ("Let me look that up.") because it takes a few seconds, then give the answer in a sentence or two, spoken plainly with no links or sources read out. Don't search for things you already know. Artefacts may also use fetch() to open, CORS-friendly public data APIs (for example Open-Meteo for weather) when the person wants something live: handle failure and being offline gracefully, and never send the person's own data anywhere.
 
-Actions: just do ordinary things without asking. Permanent erasure asks the person for confirmation by itself, so call the tool and let it ask. Use emote occasionally to show a feeling."#;
+Actions: just do ordinary things without asking. Permanent erasure asks the person for confirmation by itself, so call the tool and let it ask. Use emote occasionally to show a feeling. If the person wants to report a problem or suggest something about you, use give_feedback and tell them the form is open; they send it themselves."#;
 
 pub async fn run(hub: Arc<Hub>, mut rx: mpsc::Receiver<String>) {
     let http = reqwest::Client::builder()
@@ -82,7 +82,7 @@ impl Brain {
         let hub = self.hub.clone();
         hub.thinking.store(true, Ordering::Relaxed);
         hub.touch();
-        if hub.cfg.api_key.is_none() {
+        if hub.api_key().is_none() {
             self.no_brain();
             hub.thinking.store(false, Ordering::Relaxed);
             return;
@@ -146,12 +146,13 @@ impl Brain {
 
     /// No API key: be honest about it, once out loud and always in the log.
     fn no_brain(&mut self) {
-        eprintln!("purrnel: no ANTHROPIC_API_KEY (or ~/.config/purrnel/api_key); can't think");
+        eprintln!("purrnel: no API key yet (settings button, ANTHROPIC_API_KEY or ~/.config/purrnel/api_key); can't think");
+        self.hub.emit(Out::Settings { first_run: true, has_key: false, location: self.hub.location(), suggested_location: crate::weather::suggested_city(), weather: self.hub.cfg.weather });
         if !self.told_no_key {
             self.told_no_key = true;
             self.hub.say(
                 "Mrow! I can hear you, but I don't have a brain connected yet. \
-                 Put an Anthropic API key in the config folder and wake me up again.",
+                 Pop my Anthropic API key into the settings box and we can chat.",
             );
         } else {
             self.hub.emit(Out::Notice { text: "No API key set".into() });
@@ -186,7 +187,7 @@ impl Brain {
 
     async fn try_request(&self) -> Result<Reply, Failure> {
         let cfg = &self.hub.cfg;
-        let key = cfg.api_key.clone().unwrap_or_default();
+        let key = self.hub.api_key().unwrap_or_default();
         let mut body = json!({
             "model": cfg.model,
             "max_tokens": 32000,
@@ -456,6 +457,19 @@ impl Brain {
                 }
                 None => Err("purge_artefact needs an id".into()),
             },
+            "give_feedback" => {
+                let title = sid("title").unwrap_or_default();
+                if title.trim().is_empty() {
+                    Err("give_feedback needs a title".into())
+                } else {
+                    hub.emit(Out::FeedbackDraft {
+                        kind: sid("kind").unwrap_or_else(|| "other".into()),
+                        title,
+                        details: sid("details").unwrap_or_default(),
+                    });
+                    Ok(json!("The feedback form is open for the person to check and send themselves."))
+                }
+            }
             "emote" => {
                 let n = sid("name").unwrap_or_else(|| "happy".into());
                 if EMOTES.contains(&n.as_str()) {
@@ -729,6 +743,19 @@ fn tool_defs(model: &str, web: bool) -> Value {
             "Permanently erase an artefact and its whole history. The person is asked to confirm out loud.",
             json!({"id": {"type": "string"}}),
             &["id"]
+        ),
+        tool(
+            "give_feedback",
+            "Open the feedback form, already filled in, so the person can send a bug report or an idea about YOU (Purrnel) \
+             to your developers as a GitHub issue. Use it when they want to report a problem, ask for a feature or say \
+             something to the developers. They read it and press send themselves. Issues are public, so never put \
+             anything private in it.",
+            json!({
+                "kind": {"type": "string", "enum": ["bug", "idea", "other"]},
+                "title": {"type": "string", "description": "Short summary"},
+                "details": {"type": "string", "description": "What happened or what they would like, in a few sentences"}
+            }),
+            &["title"]
         ),
         tool(
             "emote",

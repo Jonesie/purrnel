@@ -41,6 +41,17 @@ pub enum Out {
     /// The real local weather outside: a WMO weather code plus cloud %, wind km/h, rain mm, temperature C.
     Weather { code: u16, cloud: f32, wind: f32, precip: f32, temp: f32 },
     Looking,
+    /// What the settings dialog needs. `first_run`: something is missing, so ask on startup.
+    /// The key itself is never sent to the UI.
+    Settings { first_run: bool, has_key: bool, location: Option<String>, suggested_location: Option<String>, weather: bool },
+    /// Answer to `save_settings`.
+    SettingsResult { ok: bool, error: Option<String> },
+    /// Facts the feedback form needs: where issues go and whether the harness can post them itself.
+    Info { repo: String, can_post_issue: bool, version: String },
+    /// Answer to `feedback` when the harness posted the issue itself.
+    FeedbackResult { ok: bool, url: Option<String>, error: Option<String> },
+    /// The cat opened the feedback form for the person, already filled in.
+    FeedbackDraft { kind: String, title: String, details: String },
     Notice { text: String },
     DataReply { id: String, req: u64, value: Option<Value> },
 }
@@ -60,4 +71,10 @@ pub enum In {
     Close,
     DataGet { id: String, req: u64, key: String },
     DataSet { id: String, key: String, value: Value },
+    /// The settings button: send the current settings.
+    OpenSettings,
+    /// Save what was typed in the settings dialog. A missing or empty field is left as it was.
+    SaveSettings { api_key: Option<String>, location: Option<String> },
+    /// Post feedback to GitHub as an issue (only works when a token is configured).
+    Feedback { kind: String, title: String, details: String },
 }
