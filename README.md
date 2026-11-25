@@ -6,7 +6,9 @@ apps and no files, only **artefacts** that the AI builds for you. See [PLAN.md](
 the decisions and phases.
 
 <p align="center">
-  <img src="docs/screenshots/room-day.png" alt="Purrnel the cat lounging on the sofa in the daytime" width="49%">
+  <img src="docs/screenshots/front-sit.png" alt="Purrnel sitting on the rug, facing you" width="49%">
+  <img src="docs/screenshots/room-rain.png" alt="Purrnel on the sofa while it rains outside the window" width="49%">
+  <img src="docs/screenshots/room-day.png" alt="Purrnel lounging on the sofa in the daytime" width="49%">
   <img src="docs/screenshots/room-night.png" alt="Purrnel asleep on the sofa at night, with the moon outside the window" width="49%">
 </p>
 
@@ -60,12 +62,21 @@ time the camera pulls back and she lives her life.
   public APIs when you ask for it. Web search must be enabled for your organisation in the
   Claude Console; if the API rejects it, run with `PURRNEL_WEB=0`.
 - **The window:** it shows your real local time of day (dawn, day, sunset, night with moon and
-  stars), the room dims and the lamp glows at night, and a tree outside gets the odd visit from
-  a sparrow, blue tit or robin. When she's free (not talking, busy or asleep) she hops on the
-  sill and chatters at them.
+  stars) and your **real local weather**: clear, cloudy, overcast, fog, drizzle, rain, snow or a
+  thunderstorm with lightning, with the tree swaying in the wind and the room dimming on a grey
+  day. A tree outside gets the odd visit from a sparrow, blue tit or robin (not in the rain). When
+  she's free (not talking, busy or asleep) she hops on the sill and chatters at them.
 - **Camera:** `look` takes one picture when it helps. It never streams, and never while muted.
 - **Artefacts:** Claude builds them as sandboxed HTML pages with versioned history. They open
   big over the room with a small live cat in the corner.
+
+### Weather and privacy
+
+The weather comes from [Open-Meteo](https://open-meteo.com) (free, no key) every 15 minutes. Only a
+coarse place is sent: by default the city from your system timezone (for example `Pacific/Auckland`
+becomes "Auckland"), which is looked up once to get coordinates, and those coordinates go with each
+weather request. Nothing else leaves the machine. Set `PURRNEL_LOCATION="Your Town"` for a more
+exact spot, or `PURRNEL_WEATHER=0` to switch it off. Offline, the window keeps its last weather.
 
 ## How it fits together
 
@@ -100,6 +111,9 @@ recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`... into
 | `PURRNEL_WEB` | on; `0` turns off web search and page reading |
 | `PURRNEL_PITCH` | `1.3` voice pitch multiplier (1.0 = as recorded) |
 | `PURRNEL_SPEED` | `0.92` Piper length scale (lower is faster) |
+| `PURRNEL_WEATHER` | on; `0` turns off the real-weather lookup (the window then shows fair weather) |
+| `PURRNEL_LOCATION` | place name for the weather; default is the city of your system timezone |
+| `PURRNEL_LAT`, `PURRNEL_LON` | exact coordinates for the weather (override the place name) |
 | `PURRNEL_PORT` | `7979` (bound to localhost only) |
 | `PURRNEL_DATA` | `~/.local/share/purrnel` |
 | `PURRNEL_MIC` | default PulseAudio source |
@@ -110,13 +124,15 @@ recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`... into
 ## Tests
 
 ```bash
-cargo test                              # 40 unit tests
+cargo test                              # 44 unit tests
 cargo test -- --ignored camera          # needs a webcam
 ```
 
 The UI has no automated tests; it was checked by driving it in a browser. From the browser
 console, `room.ACTS`, `room.Cat`, `room.setState('sleeping')`, `onAct([{do:'scratch'}])`,
-`room.setHour(22)` (fake the time of day) and `room.spawnBirds()` poke the room directly.
+`room.setHour(22)` (fake the time of day), `room.setWeather({code: 63, cloud: 100, wind: 25}, true)`
+(fake the weather; codes are WMO, e.g. 0 clear, 3 overcast, 45 fog, 63 rain, 73 snow, 95 storm) and
+`room.spawnBirds()` poke the room directly.
 
 ## Known gaps in phase 1
 
