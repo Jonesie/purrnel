@@ -5,6 +5,11 @@ lounge room. You talk to her; she listens and watches (unless you mute her). The
 apps and no files, only **artefacts** that the AI builds for you. See [PLAN.md](PLAN.md) for
 the decisions and phases.
 
+<p align="center">
+  <img src="docs/screenshots/room-day.png" alt="Purrnel the cat lounging on the sofa in the daytime" width="49%">
+  <img src="docs/screenshots/room-night.png" alt="Purrnel asleep on the sofa at night, with the moon outside the window" width="49%">
+</p>
+
 Status: **phase 1, desktop prototype.** The harness runs on a normal Linux desktop and serves
 the room to a browser window. Booting from USB comes in phase 2.
 
