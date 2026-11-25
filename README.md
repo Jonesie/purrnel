@@ -132,4 +132,4 @@ console, `room.ACTS`, `room.Cat`, `room.setState('sleeping')`, `onAct([{do:'scra
 
 ## License
 
-Purrnel is free software, released under the [GNU General Public License v3.0 or later](LICENSE).
+Purrnel is released under the [MIT License](LICENSE).
