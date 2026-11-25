@@ -51,7 +51,7 @@ pub enum Out {
 pub enum In {
     Text { text: String },
     ToggleMute,
-    /// A background noise from the room (e.g. the cat chattering at a bird).
+    /// A background noise from the room (e.g. the cat chattering at a bird or hissing at a dog).
     Sfx { kind: String },
     /// The user clicked or petted the cat.
     Pet,

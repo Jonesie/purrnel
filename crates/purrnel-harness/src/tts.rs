@@ -336,7 +336,7 @@ fn load_sfx(dir: &Path) -> HashMap<&'static str, Vec<PathBuf>> {
         }
         let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
         let name = stem.trim_end_matches(|c: char| c.is_ascii_digit());
-        if let Some(kind) = ["meow", "mew", "mrrp", "purr", "chatter"].into_iter().find(|k| *k == name) {
+        if let Some(kind) = ["meow", "mew", "mrrp", "purr", "chatter", "hiss"].into_iter().find(|k| *k == name) {
             out.entry(kind).or_default().push(p);
         }
     }

@@ -66,6 +66,9 @@ time the camera pulls back and she lives her life.
   thunderstorm with lightning, with the tree swaying in the wind and the room dimming on a grey
   day. A tree outside gets the odd visit from a sparrow, blue tit or robin (not in the rain). When
   she's free (not talking, busy or asleep) she hops on the sill and chatters at them.
+- **Visitors:** about as often as the birds, a dog wanders into the lounge. She freezes, her back
+  and tail puff up and she hisses until it bolts. Birds and dogs never visit at the same time, and
+  neither comes while she is talking to you.
 - **Camera:** `look` takes one picture when it helps. It never streams, and never while muted.
 - **Artefacts:** Claude builds them as sandboxed HTML pages with versioned history. They open
   big over the room with a small live cat in the corner.
@@ -94,12 +97,13 @@ Piper worker (pitch-shifted) + cat sounds -> paplay (+ mouth levels) -+--> webso
 - `ui/index.html`: the whole UI: the room, the front-facing and side-on cat rigs, the curled-up
   sleeper, the behaviour engine and the camera. Behaviours are plain `async` functions in `ACTS`.
 - `tools/tts_worker.py`: persistent Piper worker (loads the voice once, pitch-shifts with ffmpeg).
-- `tools/make_sfx.py`: synthesises the cat noises into `assets/sfx/`.
+- `tools/make_sfx.py`: synthesises the cat noises (including the hiss) into `assets/sfx/`.
 - `tools/mock_anthropic.py`: a fake streaming API for testing without a key.
 
 Cat noises written as words ("mrow", "mew", "mrrp", "purr") are played as sounds instead of
 being spoken. **The sounds are synthetic and a first attempt**: replace them with real
-recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`... into `assets/sfx/`.
+recordings by dropping `meow1.wav`, `mew1.wav`, `mrrp1.wav`, `purr1.wav`, `chatter1.wav`,
+`hiss1.wav`... into `assets/sfx/`. The hiss also plays for the `hiss` emote.
 
 ## Configuration (environment variables)
 
@@ -132,7 +136,7 @@ The UI has no automated tests; it was checked by driving it in a browser. From t
 console, `room.ACTS`, `room.Cat`, `room.setState('sleeping')`, `onAct([{do:'scratch'}])`,
 `room.setHour(22)` (fake the time of day), `room.setWeather({code: 63, cloud: 100, wind: 25}, true)`
 (fake the weather; codes are WMO, e.g. 0 clear, 3 overcast, 45 fog, 63 rain, 73 snow, 95 storm) and
-`room.spawnBirds()` poke the room directly.
+`room.spawnBirds()` / `room.spawnDog()` poke the room directly.
 
 ## Known gaps in phase 1
 

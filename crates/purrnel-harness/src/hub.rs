@@ -14,7 +14,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 pub enum Speak {
     Text(String),
     Sfx(&'static str),
-    /// A background noise (chattering at birds): doesn't make her "talk", but she mustn't hear it.
+    /// A background noise (chattering at birds, hissing at dogs): doesn't make her "talk", but she mustn't hear it.
     Ambient(&'static str),
 }
 
@@ -223,10 +223,11 @@ impl Hub {
         }
     }
 
-    /// A sound the UI asks for (the cat chattering at a bird). Unknown names are ignored.
+    /// A sound the UI asks for (the cat chattering at a bird, hissing at a dog). Unknown names are ignored.
     pub fn play_ambient(&self, kind: &str) {
         let kind: &'static str = match kind {
             "chatter" => "chatter",
+            "hiss" => "hiss",
             "mew" => "mew",
             "mrrp" => "mrrp",
             "meow" => "meow",

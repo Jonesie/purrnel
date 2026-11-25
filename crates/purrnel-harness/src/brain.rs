@@ -632,6 +632,7 @@ pub fn emote_sound(emote: &str) -> Option<&'static str> {
         "purr" | "love" => Some("purr"),
         "happy" => Some("mrrp"),
         "curious" | "wave" => Some("mew"),
+        "hiss" => Some("hiss"),
         _ => None,
     }
 }
@@ -835,10 +836,11 @@ mod tests {
     fn feelings_make_noises() {
         assert_eq!(emote_sound("purr"), Some("purr"));
         assert_eq!(emote_sound("happy"), Some("mrrp"));
-        assert_eq!(emote_sound("hiss"), None);
+        assert_eq!(emote_sound("hiss"), Some("hiss"));
+        assert_eq!(emote_sound("yawn"), None);
         for e in EMOTES {
             if let Some(k) = emote_sound(e) {
-                assert!(["meow", "mew", "mrrp", "purr"].contains(&k));
+                assert!(["meow", "mew", "mrrp", "purr", "hiss"].contains(&k));
             }
         }
     }

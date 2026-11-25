@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesise cat noises (meow, mew, mrrp, purr) into assets/sfx/*.wav.
+"""Synthesise cat noises (meow, mew, mrrp, purr, chatter, hiss) into assets/sfx/*.wav.
 
 A buzzy glottal source with a gliding pitch is run through three resonators whose
 centre frequencies glide too (the "ee-a-ow" vowel shape of a meow). These are a
@@ -126,6 +126,31 @@ def chatter(seed, rate, length):
     return x * gate + clicks * np.max(np.abs(x))
 
 
+def hiss(seed, length):
+    """An angry 'ffff-sssssh': a spit of noise, then a long airy hiss with a low growl under it."""
+    rng = np.random.default_rng(seed)
+    n = int(length * RATE)
+    t = np.arange(n) / RATE
+    noise = rng.standard_normal(n)
+    # Shape the noise in the frequency domain: nothing below ~1.2 kHz, a broad peak around 4-6 kHz.
+    spec = np.fft.rfft(noise)
+    f = np.fft.rfftfreq(n, 1 / RATE)
+    shape = np.clip((f - 1200) / 1800, 0, 1) * np.exp(-(((f - 5200) / 3600) ** 2))
+    air = np.fft.irfft(spec * shape, n)
+    # A fast, uneven shimmer makes it sound breathed rather than hissed by a machine.
+    shimmer = 0.8 + 0.2 * np.sin(2 * np.pi * 9 * t + 1.7) + 0.08 * rng.standard_normal(n).cumsum() / np.sqrt(np.arange(1, n + 1))
+    env = curve([(0, 0), (0.03, 1), (0.12, 0.55), (0.3, 0.95), (0.8, 0.8), (1, 0)], n)
+    spit = np.zeros(n)  # the little 'ptt' before the hiss
+    k = int(0.035 * RATE)
+    spit[:k] = rng.standard_normal(k) * np.hanning(2 * k)[k:] * 1.6
+    # A rough growl: pulse-trained low harmonics, quiet.
+    f0 = 95 + 12 * np.sin(2 * np.pi * 3 * t)
+    ph = np.cumsum(f0) / RATE
+    growl = sum(np.sin(2 * np.pi * h * ph) / h for h in range(1, 6)) * (0.6 + 0.4 * rng.standard_normal(n).clip(-1, 1))
+    x = air * shimmer * env + 0.12 * np.max(np.abs(air)) * spit + 0.07 * np.max(np.abs(air)) * growl * env
+    return x
+
+
 def save(name, x, peak=0.45):
     x = x / (np.max(np.abs(x)) + 1e-9) * peak
     with wave.open(str(OUT / name), "wb") as w:
@@ -148,3 +173,5 @@ if __name__ == "__main__":
         save(f"purr{i}.wav", purr(40 + i, length), peak=0.3)
     for i, (rate, length) in enumerate([(11, 1.0), (13, 1.2)], 1):
         save(f"chatter{i}.wav", chatter(50 + i, rate, length), peak=0.4)
+    for i, length in enumerate([1.0, 1.25, 1.5], 1):
+        save(f"hiss{i}.wav", hiss(60 + i, length), peak=0.6)
