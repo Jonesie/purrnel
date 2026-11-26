@@ -20,7 +20,8 @@ use tokio::sync::mpsc;
 async fn main() -> std::io::Result<()> {
     let cfg = Config::from_env();
     eprintln!(
-        "purrnel: model {} | brain key: {} | data: {}",
+        "purrnel {} | model {} | brain key: {} | data: {}",
+        server::VERSION,
         cfg.model,
         if cfg.api_key.is_some() { "found" } else { "MISSING" },
         cfg.data_dir.display()

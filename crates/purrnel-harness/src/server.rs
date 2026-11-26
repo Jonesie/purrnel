@@ -15,6 +15,18 @@ use tokio::sync::broadcast::error::RecvError;
 
 const EMBEDDED_UI: &str = include_str!("../../../ui/index.html");
 
+/// The release this was built from (the git tag, e.g. "v0.2.0"), set as PURRNEL_VERSION when the
+/// release image is built. Any other build says "dev".
+pub const VERSION: &str = match option_env!("PURRNEL_VERSION") {
+    Some(v) if !v.is_empty() => v,
+    _ => "dev",
+};
+
+/// Fill the version into the page (the placeholder is shown dimly at the top).
+fn with_version(html: &str) -> String {
+    html.replace("__PURRNEL_VERSION__", VERSION)
+}
+
 pub async fn serve(hub: Arc<Hub>) -> std::io::Result<()> {
     let addr = format!("{}:{}", hub.cfg.bind, hub.cfg.port);
     let app = Router::new()
@@ -30,7 +42,7 @@ pub async fn serve(hub: Arc<Hub>) -> std::io::Result<()> {
 async fn index(State(hub): State<Arc<Hub>>) -> impl IntoResponse {
     let html = std::fs::read_to_string(hub.cfg.ui_dir.join("index.html"))
         .unwrap_or_else(|_| EMBEDDED_UI.to_string());
-    ([("cache-control", "no-store")], Html(html))
+    ([("cache-control", "no-store")], Html(with_version(&html)))
 }
 
 /// Only the kiosk page itself may drive the cat. Browsers let any website open a websocket to
@@ -173,7 +185,15 @@ async fn handle(hub: &Arc<Hub>, msg: In) {
 
 #[cfg(test)]
 mod tests {
-    use super::origin_ok;
+    use super::{origin_ok, with_version, EMBEDDED_UI, VERSION};
+
+    #[test]
+    fn the_page_shows_the_version() {
+        assert!(EMBEDDED_UI.contains("__PURRNEL_VERSION__"), "the page lost its version placeholder");
+        let page = with_version(EMBEDDED_UI);
+        assert!(!page.contains("__PURRNEL_VERSION__"));
+        assert!(page.contains(&format!(r#"<div id="version">{VERSION}</div>"#)));
+    }
 
     #[test]
     fn only_the_kiosk_page_may_connect() {

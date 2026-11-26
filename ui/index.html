@@ -59,6 +59,10 @@
   #conn { display: none; color: var(--danger); }
   body.disconnected #conn { display: inline-flex; }
 
+  /* the release this was built from; "dev" for a build that is not a release */
+  #version { position: fixed; left: 22px; top: 66px; z-index: 5; pointer-events: none;
+    font-size: 11px; letter-spacing: .06em; color: var(--ink-dim); opacity: .5; }
+
   #topright { position: fixed; right: 16px; top: 16px; display: flex; gap: 10px; align-items: center; z-index: 5; }
   .btn {
     background: var(--panel); border: 1px solid var(--panel-line); border-radius: 999px;
@@ -600,6 +604,8 @@
     <div id="caption"></div>
   </div>
 </div>
+
+<div id="version">__PURRNEL_VERSION__</div>
 
 <div id="topleft">
   <span class="chip" id="brand">Purrnel</span>

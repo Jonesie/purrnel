@@ -1,6 +1,6 @@
 # Everything Purrnel needs at run time, kept as small as we can make it.
 # The same `purrnel` package goes into the container image now and the NixOS USB image later.
-{ pkgs, src }:
+{ pkgs, src, releaseVersion ? "dev" }:
 let
   inherit (pkgs) lib;
 
@@ -28,6 +28,8 @@ let
     pname = "purrnel-harness";
     version = "0.1.0";
     src = rustSrc;
+    # Shown at the top of the page: the release tag, or "dev".
+    PURRNEL_VERSION = releaseVersion;
     cargoLock.lockFile = src + "/Cargo.lock";
     cargoBuildFlags = [ "-p" "purrnel-harness" ];
     cargoTestFlags = [ "--workspace" ];

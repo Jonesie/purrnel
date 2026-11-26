@@ -55,9 +55,12 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       # The Rust tests run inside this build, so a release cannot be published from failing code.
+      # PURRNEL_VERSION puts the tag at the top of the page; reading it needs --impure.
       - name: Build the image
+        env:
+          PURRNEL_VERSION: ${{ github.ref_name }}
         run: |
-          out=$(nix build .#docker --no-link --print-out-paths)
+          out=$(nix build --impure .#docker --no-link --print-out-paths)
           docker load < "$out"
 
       - name: Smoke test

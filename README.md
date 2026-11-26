@@ -221,6 +221,9 @@ scripts/docker.sh size      # what is in it
   docker run ... ghcr.io/jonesie/purrnel:0.2.0
   ```
 
+  The tag is also built into the page: it shows as dim text under the top-left chips (`dev` for any
+  build that is not a release, such as `cargo run` or a pull request build).
+
   The first publish creates the package as private; make it public under the repository's
   Packages settings if others should pull it.
 - Without a binary cache each run rebuilds ffmpeg, Piper and whisper.cpp, which is slow. To cache
