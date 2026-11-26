@@ -4,6 +4,8 @@ use std::path::PathBuf;
 /// a dev machine and (later) on the NixOS image.
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Address the UI is served on. Localhost unless the harness runs inside a container.
+    pub bind: String,
     pub port: u16,
     pub data_dir: PathBuf,
     pub ui_dir: PathBuf,
@@ -74,6 +76,7 @@ impl Config {
         let root = env("PURRNEL_ROOT").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
         let api_key = env("ANTHROPIC_API_KEY").or_else(|| saved("api_key"));
         Config {
+            bind: env("PURRNEL_BIND").unwrap_or_else(|| "127.0.0.1".into()),
             port: env("PURRNEL_PORT").and_then(|v| v.parse().ok()).unwrap_or(7979),
             data_dir: env("PURRNEL_DATA")
                 .map(PathBuf::from)

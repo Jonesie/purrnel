@@ -1,0 +1,81 @@
+name: CI
+
+# Builds and tests every pull request, and main after a merge.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to the same branch replaces the run still going for the old one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Quick feedback: compile and run the Rust tests with the normal toolchain.
+  rust:
+    name: Rust tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+
+  # Style checks. Not required yet: the code has never been run through rustfmt or clippy, so these
+  # report problems without failing the run. Delete `continue-on-error` once they are clean.
+  lint:
+    name: Format and clippy (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  # The real deliverable: build the container exactly as a release would and check it starts.
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # The Nix build needs several GB; the runner image carries a lot we do not use.
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost
+
+      - uses: cachix/install-nix-action@v32
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Optional binary cache. Without it every run rebuilds ffmpeg, Piper and Whisper (slow).
+      # To turn it on: make a cache at cachix.org, add its name as the repository variable
+      # CACHIX_CACHE and a token as the secret CACHIX_AUTH_TOKEN.
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_CACHE != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      # This also runs the Rust tests again inside the Nix sandbox, so the packaged build is tested too.
+      - name: Build the image
+        run: |
+          out=$(nix build .#docker --no-link --print-out-paths)
+          docker load < "$out"
+
+      - name: Smoke test
+        run: scripts/smoke-test.sh purrnel:latest
+
+      - name: Image size
+        run: docker image ls purrnel:latest

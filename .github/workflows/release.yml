@@ -1,0 +1,84 @@
+name: Release
+
+# Pushing a version tag (v1.2.3) builds the container and publishes it to GitHub's container registry:
+#   ghcr.io/jonesie/purrnel:1.2.3   (and :1.2 and :latest, except for pre-releases like v1.2.3-rc1)
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish the container
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Work out the tags
+        id: meta
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "tag '$GITHUB_REF_NAME' is not a version like v1.2.3" >&2
+            exit 1
+          fi
+          # Registry names must be lower case; the owner may not be.
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tags="$image:$version"
+          if [[ "$version" != *-* ]]; then
+            tags="$tags $image:${version%.*} $image:latest"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $tags"
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost
+
+      - uses: cachix/install-nix-action@v32
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Same optional cache as CI, so a release reuses what the pull request already built.
+      - uses: cachix/cachix-action@v17
+        if: vars.CACHIX_CACHE != ''
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      # The Rust tests run inside this build, so a release cannot be published from failing code.
+      - name: Build the image
+        run: |
+          out=$(nix build .#docker --no-link --print-out-paths)
+          docker load < "$out"
+
+      - name: Smoke test
+        run: scripts/smoke-test.sh purrnel:latest
+
+      - name: Log in to the registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          for tag in $TAGS; do
+            docker tag purrnel:latest "$tag"
+            docker push "$tag"
+          done
+          {
+            echo "### Published"
+            for tag in $TAGS; do echo "- \`$tag\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"

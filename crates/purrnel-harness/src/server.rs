@@ -16,7 +16,7 @@ use tokio::sync::broadcast::error::RecvError;
 const EMBEDDED_UI: &str = include_str!("../../../ui/index.html");
 
 pub async fn serve(hub: Arc<Hub>) -> std::io::Result<()> {
-    let addr = format!("127.0.0.1:{}", hub.cfg.port);
+    let addr = format!("{}:{}", hub.cfg.bind, hub.cfg.port);
     let app = Router::new()
         .route("/", get(index))
         .route("/ws", get(ws_upgrade))

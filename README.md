@@ -12,8 +12,9 @@ the decisions and phases.
   <img src="docs/screenshots/room-night.png" alt="Purrnel asleep on the sofa at night, with the moon outside the window" width="49%">
 </p>
 
-Status: **phase 1, desktop prototype.** The harness runs on a normal Linux desktop and serves
-the room to a browser window. Booting from USB comes in phase 2.
+Status: **phase 1 (desktop prototype) is done; phase 2 (image) has started** with a Nix-built
+container. The harness runs on a normal Linux desktop and serves the room to a browser window,
+or runs in the container below. Booting from USB is the next step of phase 2.
 
 ## Run it
 
@@ -144,7 +145,8 @@ pads every sound with a little silence. `PURRNEL_KEEPALIVE=0` turns the silent s
 | `PURRNEL_GITHUB_TOKEN`, `PURRNEL_REPO` | optional token to post feedback issues directly; repository for them (`Jonesie/purrnel`) |
 | `PURRNEL_KEEPALIVE` | on; `0` stops the silent stream that keeps the sound card awake (see below) |
 | `PURRNEL_LAT`, `PURRNEL_LON` | exact coordinates for the weather (override the place name) |
-| `PURRNEL_PORT` | `7979` (bound to localhost only) |
+| `PURRNEL_PORT` | `7979` |
+| `PURRNEL_BIND` | `127.0.0.1` (localhost only; the container sets `0.0.0.0` and publishes the port on the host's localhost) |
 | `PURRNEL_DATA` | `~/.local/share/purrnel` |
 | `PURRNEL_MIC` | default PulseAudio source |
 | `PURRNEL_CAMERA` | `/dev/video0` |
@@ -163,6 +165,53 @@ console, `room.ACTS`, `room.Cat`, `room.setState('sleeping')`, `onAct([{do:'scra
 `room.setHour(22)` (fake the time of day), `room.setWeather({code: 63, cloud: 100, wind: 25}, true)`
 (fake the weather; codes are WMO, e.g. 0 clear, 3 overcast, 45 fog, 63 rain, 73 snow, 95 storm) and
 `room.spawnBirds()` / `room.spawnDog()` poke the room directly.
+
+## Container (phase 2, step 1)
+
+The same harness runs in a container built by Nix, which is the first step towards the USB image:
+the Nix package is shared, and the container is just a quick way to test it. The image holds
+Purrnel and its closure only (no distro, no shell, no package manager) and the speech models are
+baked in, so there is nothing to download at run time.
+
+```bash
+scripts/docker.sh build     # nix build .#docker, then docker load (the first build takes a while)
+scripts/docker.sh run       # UI on http://localhost:7979, this machine only
+scripts/docker.sh size      # what is in it
+```
+
+- Sound in and out goes through the host's PulseAudio / PipeWire socket; the camera is passed
+  through if `/dev/video0` exists. The key, place and artefacts live in the `purrnel-data` volume.
+- It runs as your user (`--user`), so the sound server accepts it. Set `PURRNEL_PORT` for another
+  port; the port is the same inside and out because the page checks where its websocket comes from.
+- `docker run -e ANTHROPIC_API_KEY ...` works as before; otherwise the first-run dialog asks.
+- **Size:** about 414 MB compressed, 880 MB unpacked. Biggest parts: Python with onnxruntime and
+  numpy for Piper (585 MB closure, sharing glibc with the rest), whisper.cpp with its llama.cpp
+  backend (231 MB closure, including the 57 MB model), ffmpeg (104 MB closure), the Piper voice (60 MB). Trimmed so far: OpenVINO,
+  SDL/GTK, Piper's training stack, an unused copy of ffmpeg and ALSA plugins.
+  Next candidates: replace Piper's Python with a native build, and the two duplicate 35 MB BLAS copies
+  that numpy carries.
+
+### CI and releases
+
+- **Pull requests and `main`** (`.github/workflows/ci.yml`): runs the Rust tests, builds the
+  container with Nix (which tests the packaged build again) and starts it with
+  `scripts/smoke-test.sh`: page served, speech models loaded, the page's own websocket accepted and
+  another website's refused. Format and clippy are checked too but only advisory for now, because
+  the code has not been through rustfmt yet.
+- **Release** (`.github/workflows/release.yml`): push a version tag and the same build is published
+  to `ghcr.io/jonesie/purrnel` as `1.2.3`, `1.2` and `latest` (pre-releases like `v1.2.3-rc1` get
+  only their own tag).
+
+  ```bash
+  git tag v0.2.0 && git push origin v0.2.0
+  docker run ... ghcr.io/jonesie/purrnel:0.2.0
+  ```
+
+  The first publish creates the package as private; make it public under the repository's
+  Packages settings if others should pull it.
+- Without a binary cache each run rebuilds ffmpeg, Piper and whisper.cpp, which is slow. To cache
+  them, create a cache at cachix.org and add its name as the repository variable `CACHIX_CACHE` and
+  its token as the secret `CACHIX_AUTH_TOKEN`; both workflows use it when set.
 
 ## Known gaps in phase 1
 

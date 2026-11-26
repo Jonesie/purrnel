@@ -57,6 +57,8 @@ Cheshire, Familiar).
    web UI in a window: cat, voice in/out, Claude loop, artefacts. Goal: does it *feel*
    good? Verified against a mock API; still needs a first run with a real key.
 2. **Image**: NixOS config booting the same thing in a kiosk; test in QEMU.
+   *Step 1 done: a Nix flake packages the harness, models and tools and builds a small container
+   image (`scripts/docker.sh`). Next: shrink it further, then a NixOS module + kiosk compositor.*
 3. **USB hardening**: persistence, first-run wifi/API-key setup, firmware,
    image size.
 4. **Extras**: camera understanding, more characters, sync.
