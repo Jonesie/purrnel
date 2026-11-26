@@ -61,7 +61,7 @@ jobs:
           docker load < "$out"
 
       - name: Smoke test
-        run: scripts/smoke-test.sh purrnel:latest
+        run: bash scripts/smoke-test.sh purrnel:latest
 
       - name: Log in to the registry
         uses: docker/login-action@v4

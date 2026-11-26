@@ -75,7 +75,7 @@ jobs:
           docker load < "$out"
 
       - name: Smoke test
-        run: scripts/smoke-test.sh purrnel:latest
+        run: bash scripts/smoke-test.sh purrnel:latest
 
       - name: Image size
         run: docker image ls purrnel:latest
