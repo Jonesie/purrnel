@@ -3,7 +3,9 @@
 # only Purrnel and what it needs: no distro, no shell, no package manager.
 #
 #   scripts/docker.sh build   build the image and load it into Docker
-#   scripts/docker.sh run     run it; the UI is on http://localhost:7979 (this machine only; PURRNEL_PORT changes it)
+#   scripts/docker.sh run     run it; the UI is on http://localhost:7979 (this machine only; PURRNEL_PORT changes it).
+#                             The first time it asks for your Anthropic API key and where you live (for the
+#                             weather), unless ANTHROPIC_API_KEY / PURRNEL_LOCATION (or the *_FILE versions) are set.
 #   scripts/docker.sh size    what is in the image and how big it is
 #
 # Extra arguments to `run` go to `docker run`, e.g. `-e PURRNEL_LOCATION=Auckland`.
@@ -43,8 +45,15 @@ case "${1:-run}" in
     fi
     # The image has no group file, so give the camera's group by number.
     [ -e /dev/video0 ] && args+=(--device /dev/video0 --group-add "$(stat -c %g /dev/video0)")
-    # Pass the key through if it is set; otherwise the first-run dialog asks for it.
+    # The key and the place, from the first of these that is set (the image's start script does the
+    # same lookup inside): the environment, a file (mounted as a Docker secret), or what an earlier
+    # run saved in the volume. If none is set and this is a terminal, the start script asks.
     [ -n "${ANTHROPIC_API_KEY:-}" ] && args+=(-e ANTHROPIC_API_KEY)
+    [ -n "${PURRNEL_LOCATION:-}" ] && args+=(-e PURRNEL_LOCATION)
+    [ -n "${ANTHROPIC_API_KEY_FILE:-}" ] && args+=(-v "$(realpath "$ANTHROPIC_API_KEY_FILE"):/run/secrets/anthropic_api_key:ro")
+    [ -n "${PURRNEL_LOCATION_FILE:-}" ] && args+=(-v "$(realpath "$PURRNEL_LOCATION_FILE"):/run/secrets/purrnel_location:ro")
+    # With a terminal the start script can ask questions (and Ctrl-C stops the container).
+    [ -t 0 ] && [ -t 1 ] && args+=(-it)
     exec docker run "${args[@]}" "$@" "$name"
     ;;
   *)

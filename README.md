@@ -183,7 +183,21 @@ scripts/docker.sh size      # what is in it
   through if `/dev/video0` exists. The key, place and artefacts live in the `purrnel-data` volume.
 - It runs as your user (`--user`), so the sound server accepts it. Set `PURRNEL_PORT` for another
   port; the port is the same inside and out because the page checks where its websocket comes from.
-- `docker run -e ANTHROPIC_API_KEY ...` works as before; otherwise the first-run dialog asks.
+- **Key and place:** the image starts through `scripts/container-start.sh`, which takes each from
+  the first of these that exists:
+
+  | | API key | location (weather) |
+  |---|---|---|
+  | environment | `ANTHROPIC_API_KEY` | `PURRNEL_LOCATION` |
+  | file named in the environment | `ANTHROPIC_API_KEY_FILE` | `PURRNEL_LOCATION_FILE` |
+  | Docker secret | `/run/secrets/anthropic_api_key` | `/run/secrets/purrnel_location` |
+  | saved in the volume | `/data/config/api_key` | `/data/config/location` |
+
+  If one is still missing and the container has a terminal (`docker run -it`, which
+  `scripts/docker.sh run` uses when it can), it asks once, hides what you type for the key, and
+  saves the answers in the volume (mode 600); press Enter to skip either. Without a terminal it
+  just starts, and the page's first-run dialog asks instead. With `scripts/docker.sh`, the `*_FILE`
+  variables name files on your machine, which are mounted read-only as the secrets.
 - **Size:** about 414 MB compressed, 880 MB unpacked. Biggest parts: Python with onnxruntime and
   numpy for Piper (585 MB closure, sharing glibc with the rest), whisper.cpp with its llama.cpp
   backend (231 MB closure, including the 57 MB model), ffmpeg (104 MB closure), the Piper voice (60 MB). Trimmed so far: OpenVINO,

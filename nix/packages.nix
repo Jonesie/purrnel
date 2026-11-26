@@ -129,16 +129,24 @@ let
         --prefix PATH : ${lib.makeBinPath [ ffmpeg pkgs.pulseaudio ]}
     '';
 
+  # What the container runs first: asks for the API key and place if it has a terminal and they are
+  # not set, then starts purrnel. The text is scripts/container-start.sh.
+  start = pkgs.writeShellApplication {
+    name = "purrnel-start";
+    runtimeInputs = [ pkgs.coreutils purrnel ];
+    text = builtins.readFile ../scripts/container-start.sh;
+  };
+
   # `docker load < result`, then see scripts/docker.sh.
   docker = pkgs.dockerTools.buildLayeredImage {
     name = "purrnel";
     tag = "latest";
-    contents = [ purrnel ];
+    contents = [ purrnel start ];
     extraCommands = ''
       mkdir -m 1777 tmp data
     '';
     config = {
-      Entrypoint = [ "${purrnel}/bin/purrnel" ];
+      Entrypoint = [ "${start}/bin/purrnel-start" ];
       Env = [
         "PURRNEL_BIND=0.0.0.0"
         "PURRNEL_CONFIG=/data/config"
